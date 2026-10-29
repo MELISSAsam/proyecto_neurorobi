@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: neurorobi-backend
+    runtime: node
+    plan: starter
+    rootDir: backend_NeuroRobi-main/neurorobi_backend
+    buildCommand: npm ci --include=dev && npx prisma generate && npm run build
+    startCommand: npm run start:render
+    healthCheckPath: /health
+    disk:
+      name: neurorobi-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 22.20.0
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: file:/var/data/neurorobi.db
+      - key: UPLOADS_DIR
+        value: /var/data/uploads
+      - key: SEED_DEMO_DATA
+        value: "false"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: INITIAL_ADMIN_EMAIL
+        sync: false
+      - key: INITIAL_ADMIN_PASSWORD
+        sync: false

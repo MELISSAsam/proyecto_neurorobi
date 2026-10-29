@@ -1,174 +1,124 @@
-# NeuroRobi: Vercel + Railway
+# NeuroRobi: Vercel + Render
 
-El frontend React se publica en Vercel. El backend completo se publica como un solo servicio Docker en Railway, con sus seis procesos internos y un volumen persistente para SQLite y fotos. No necesitas contratar un VPS, instalar Docker en tu PC ni comprar un dominio para empezar.
+Frontend React en Vercel; backend y sensores en un solo Web Service de Render. El backend conserva sus seis procesos internos y SQLite. La base y las fotos se guardan en un disco persistente. El archivo `render.yaml` de la raiz configura el servicio mediante Blueprint.
 
-Los archivos `compose.yaml` y `Caddyfile` son una alternativa local; no se usan en este procedimiento.
+## Coste del almacenamiento
 
-## 1. Subir el proyecto a GitHub
+Esta configuracion necesita un servicio **de pago** en Render: el plan Free no admite discos persistentes y perderia SQLite y las fotos al reiniciar o desplegar. El Blueprint propone Starter y un disco de 1 GB. Revisa el coste mostrado por Render antes de confirmar la creacion. No se ha medido la memoria bajo carga de los seis procesos; aumenta el plan si observas falta de memoria.
 
-Crea un repositorio privado en GitHub. Puedes subir la carpeta NEUROBI con GitHub Desktop mediante Add local repository → Publish repository. Debe contener las dos carpetas del proyecto, sus package-lock.json y los archivos nuevos de despliegue.
+Fuentes: [discos persistentes](https://render.com/docs/disks), [limites de Free](https://render.com/docs/free) y [precios](https://render.com/pricing).
 
-Si prefieres Git, desde PowerShell en NEUROBI:
+Si necesitas alojamiento gratuito, antes de desplegar hay que adaptar la base a un servicio externo y las fotos a almacenamiento de objetos. No basta con cambiar el plan a Free.
 
-```powershell
-git status
-git add .
-git diff --cached --stat
-git commit -m "Preparar despliegue en Vercel y Railway"
-git branch -M main
-git remote add origin https://github.com/TU_USUARIO/TU_REPOSITORIO.git
-git push -u origin main
-```
+## 1. Crear el backend
 
-Sustituye usuario y repositorio por los tuyos. Si `origin` ya existe, utiliza ese remoto. Revisa lo que se va a subir antes de confirmar: nunca incluyas claves, archivos `.env`, bases `.db`, fotos privadas o `node_modules`. El `.gitignore` raiz excluye esos archivos; las plantillas `.example` si se publican.
+1. Entra en https://dashboard.render.com y conecta tu cuenta de GitHub.
+2. Selecciona **New → Blueprint**.
+3. Conecta `MELISSAsam/proyecto_neurorobi`, rama `main`.
+4. Usa el archivo `render.yaml` de la raiz del repositorio.
+5. Render mostrara el servicio `neurorobi-backend`, su disco y las variables que debes completar:
+   - `INITIAL_ADMIN_EMAIL`: tu correo para iniciar sesion en NeuroRobi.
+   - `INITIAL_ADMIN_PASSWORD`: una contrasena nueva de al menos 12 caracteres.
+6. Revisa el plan y el coste antes de confirmar. Inicia la creacion cuando estes conforme.
 
-## 2. Crear el backend en Railway
-
-1. En https://railway.com crea un proyecto y conecta el repositorio de GitHub. Puedes crear primero un proyecto vacio y agregar un servicio desde GitHub para configurar todo antes de desplegar.
-2. Selecciona el servicio del backend. No necesitas seis servicios de Railway ni un PostgreSQL adicional para esta configuracion.
-3. Configura estas rutas en Settings:
+El Blueprint configura automaticamente:
 
 | Ajuste | Valor |
 | --- | --- |
-| Root Directory | `/backend_NeuroRobi-main/neurorobi_backend` |
-| Config File Path | `/backend_NeuroRobi-main/neurorobi_backend/railway.json` |
-| Builder | Dockerfile |
-| Dockerfile | `Dockerfile` dentro de la raiz del servicio |
-| Start Command | `npm run start:railway` |
-| Healthcheck Path | `/health` |
-| Replicas | `1` |
+| Runtime | Node |
+| Node | 22.20.0 |
+| Root Directory | `backend_NeuroRobi-main/neurorobi_backend` |
+| Build Command | `npm ci --include=dev && npx prisma generate && npm run build` |
+| Start Command | `npm run start:render` |
+| Health Check Path | `/health` |
+| Persistent Disk | `/var/data`, 1 GB |
+| DATABASE_URL | `file:/var/data/neurorobi.db` |
+| UPLOADS_DIR | `/var/data/uploads` |
+| JWT_SECRET | Generado automaticamente por Render |
 
-`railway.json` incluye constructor, arranque, healthcheck y reinicios. La ruta del archivo de configuracion se indica desde la raiz del repositorio, aunque hayas definido Root Directory. Si Railway intenta compilar desde NEUROBI o usa Railpack, revisa estas rutas y vuelve a desplegar.
+No uses el comando `npm start`: solo arranca el gateway. `start:render` aplica migraciones, prepara el administrador y arranca los seis procesos. Si alguno termina, se detienen los demas para que Render pueda reiniciar el servicio completo.
 
-Documentacion: [monorepos](https://docs.railway.com/deployments/monorepo) y [configuracion como codigo](https://docs.railway.com/config-as-code/reference).
+No crees PostgreSQL adicional para esta configuracion ni seis servicios separados. El gateway utiliza el PORT que proporciona Render y escucha en `0.0.0.0`. Conserva los puertos y URL internos por defecto. No necesitas instalar Docker en tu PC.
 
-## 3. Agregar almacenamiento persistente
+Las migraciones corren al arrancar, cuando el disco ya esta montado. No las muevas al build ni a un comando previo que no tenga acceso al disco. Esta configuracion crea una base nueva: importar una base anterior requiere comprobar el esquema y establecer su historial de migraciones.
 
-En el proyecto Railway, agrega un Volume, conectalo al servicio backend y establece:
+Referencia: [Blueprint YAML](https://render.com/docs/blueprint-spec).
 
-```text
-Mount Path: /app/data
-```
+## 2. Comprobar el backend
 
-Dentro quedaran `/app/data/neurorobi.db` y `/app/data/uploads`. No crees el volumen en otro servicio. No uses el sistema de archivos temporal del contenedor para estos datos. Mantén una sola replica y una sola region con esta configuracion SQLite. Los reinicios cortaran temporalmente las conexiones de sensores.
+Espera a que el servicio este Live. En los logs deben aparecer las migraciones aplicadas, el administrador preparado y los servicios arrancados.
 
-Los volumenes se montan al iniciar el contenedor; por eso las migraciones estan en `start:railway`, no en Pre-deploy Command. La imagen usa un usuario sin privilegios por defecto y Railway monta el volumen como root; la variable `RAILWAY_RUN_UID=0` de abajo permite escribir en el volumen.
+Copia la URL HTTPS que muestra Render, por ejemplo `https://TU-BACKEND.onrender.com`. No adivines el dominio: usa el asignado a tu servicio.
 
-Fuente: [volumenes y permisos de Railway](https://docs.railway.com/volumes).
+Abre `https://TU-BACKEND.onrender.com/health`. Debe responder JSON con `status: "ok"`. Ese endpoint comprueba el gateway; verifica los demas servicios mediante las pruebas funcionales del paso 5.
 
-## 4. Configurar las variables del backend
+## 3. Crear el frontend en Vercel
 
-En Railway → backend → Variables, configura lo siguiente. Puedes usar Raw Editor y la plantilla `backend_NeuroRobi-main/neurorobi_backend/.env.railway.example`.
-
-```dotenv
-NODE_ENV=production
-PORT=8080
-DATABASE_URL=file:/app/data/neurorobi.db
-UPLOADS_DIR=/app/data/uploads
-SEED_DEMO_DATA=false
-RAILWAY_RUN_UID=0
-JWT_SECRET=TU_SECRETO_ALEATORIO
-INITIAL_ADMIN_EMAIL=tu-correo@ejemplo.com
-INITIAL_ADMIN_PASSWORD=TU_CONTRASENA_NUEVA
-```
-
-Genera el valor real de JWT_SECRET con este comando en PowerShell y pegalo en Railway:
-
-```powershell
-node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
-```
-
-La clave inicial del administrador debe tener al menos 12 caracteres. Estas variables son privadas del backend: no las pongas en Vercel ni les agregues el prefijo `VITE_`.
-
-No configures los puertos ni las URL internas de los microservicios: comparten el mismo contenedor y usan localhost con sus valores predeterminados. El gateway publico escucha en PORT, en todas las interfaces. No lo configures en 3002–3005 o 4000, que estan ocupados por los servicios internos.
-
-## 5. Desplegar Railway y obtener la URL
-
-Despliega el servicio. En los logs debes ver la migracion aplicada o el mensaje de que no hay migraciones pendientes, la creacion del administrador y el arranque del gateway y los demas servicios.
-
-En Settings → Networking → Public Networking, pulsa Generate Domain. Si pide Target Port, usa `8080`, el mismo PORT configurado arriba. Railway mostrara una direccion parecida a:
-
-```text
-https://TU-BACKEND.up.railway.app
-```
-
-Abre `https://TU-BACKEND.up.railway.app/health`. Debe responder JSON con `status: "ok"`. Este chequeo confirma el gateway; la prueba funcional del paso 8 confirma los otros servicios.
-
-Si Railway despliega automaticamente antes de que hayas creado el volumen o las variables, completa la configuracion y haz Redeploy.
-
-## 6. Publicar el frontend en Vercel
-
-1. En https://vercel.com selecciona Add New → Project e importa el mismo repositorio.
-2. Configura:
+En https://vercel.com selecciona **Add New → Project**, importa `MELISSAsam/proyecto_neurorobi` y configura:
 
 | Ajuste | Valor |
 | --- | --- |
 | Root Directory | `fronted_NeuroRobi-main/neurorobi_fronted` |
-| Framework Preset | Vite |
-| Node.js | 22.x |
+| Framework | Vite |
+| Node | 22.x |
 | Install Command | `npm ci` |
 | Build Command | `npm run build` |
 | Output Directory | `dist` |
 
-3. Agrega estas variables antes de desplegar, sustituyendo la URL por la real de Railway:
+Antes de Deploy, agrega estas variables con la URL real del backend:
 
 ```dotenv
-VITE_API_URL=https://TU-BACKEND.up.railway.app
-VITE_WS_URL=https://TU-BACKEND.up.railway.app
+VITE_API_URL=https://TU-BACKEND.onrender.com
+VITE_WS_URL=https://TU-BACKEND.onrender.com
 ```
 
-Ambas llevan `https://`, sin barra final ni `/api`. Socket.IO usa la URL HTTPS para establecer su conexion segura. La API y Socket.IO van directamente a Railway; no se enrutan por Vercel.
+Ambas llevan HTTPS, sin barra final ni `/api`. El navegador se conecta directamente a Render para API y Socket.IO. No uses localhost ni la URL de Vercel en estas variables. No publiques JWT_SECRET ni la clave del administrador en Vercel.
 
-4. Aplica las variables a Production. Si quieres probar Preview, configuralas tambien alli, preferiblemente contra un backend de pruebas separado.
-5. Pulsa Deploy. Vercel te entregara una URL `https://TU-FRONTEND.vercel.app`.
+Configura Production; para Preview, preferiblemente usa un backend separado de pruebas. Cada cambio en variables VITE requiere un nuevo despliegue del frontend.
 
-El archivo `vercel.json` ya configura la compilacion y la ruta de entrada de React al recargar una pagina. Cada cambio de variables VITE requiere un nuevo despliegue porque se incorporan al compilar.
+Pulsa Deploy y abre la URL asignada por Vercel.
 
-Fuentes: [Vite en Vercel](https://vercel.com/docs/frameworks/frontend/vite) y [variables de entorno](https://vercel.com/docs/environment-variables).
+Referencia: [Vite en Vercel](https://vercel.com/docs/frameworks/frontend/vite).
 
-## 7. Entrar por primera vez
+## 4. Entrar como administrador
 
-Abre la URL de Vercel e inicia sesion con INITIAL_ADMIN_EMAIL e INITIAL_ADMIN_PASSWORD. No se crean las cuentas de demostracion con claves fijas en produccion.
+Inicia sesion en la web de Vercel con el correo y clave que configuraste en Render. Las cuentas de demostracion no se crean en produccion.
 
-Despues de confirmar que puedes entrar, elimina **ambas** variables INITIAL_ADMIN_EMAIL e INITIAL_ADMIN_PASSWORD en Railway y aplica el cambio. La cuenta permanece en SQLite. El script de arranque conserva las credenciales existentes; cambiar estas variables no restablece la contrasena de una cuenta ya creada.
+Cuando compruebes el acceso, elimina ambas variables INITIAL_ADMIN_EMAIL e INITIAL_ADMIN_PASSWORD en Render y aplica el cambio. La cuenta permanece en SQLite. Si utilizas Blueprint, elimina tambien sus entradas `sync: false` de `render.yaml` y sube ese cambio para que la configuracion refleje que ya no hacen falta.
 
-## 8. Comprobar que todo funciona
+El script conserva las credenciales de una cuenta ya existente; cambiar estas variables no cambia su contrasena.
 
-Con datos ficticios:
+## 5. Pruebas
 
-1. Inicia sesion desde Vercel.
-2. Crea un paciente y sube una foto. Recarga y comprueba ambos.
-3. Inicia y guarda una sesion clinica.
-4. Verifica en las herramientas del navegador que Socket.IO se conecta al dominio Railway y no a localhost o Vercel.
-5. Reinicia o redespliega Railway y comprueba que siguen existiendo usuario, paciente, sesion y foto.
+Usa datos ficticios para comprobar:
 
-Para el ESP32, el endpoint actual de envio es `POST https://TU-BACKEND.up.railway.app/api/telemetry`. Cambia la direccion local del firmware por esa URL y configura validacion TLS con un certificado CA adecuado. No hace falta exponer 3005. El codigo del firmware no esta incluido en este proyecto, asi que esta parte debe verificarse en el dispositivo real.
+1. Inicio de sesion.
+2. Creacion de un paciente y subida de foto.
+3. Creacion y guardado de una sesion clinica.
+4. Conexion Socket.IO al dominio Render.
+5. Persistencia del usuario, paciente, sesion y foto despues de reiniciar o redesplegar Render.
 
-## 9. Actualizaciones, copias y costes
+Para el ESP32, el endpoint actual es `POST https://TU-BACKEND.onrender.com/api/telemetry`. Configura la URL y la validacion TLS en el firmware. El firmware no esta incluido aqui: hay que probarlo con el dispositivo real.
 
-Una vez conectados a GitHub, los despliegues pueden actualizarse con cada push a la rama configurada. Los cambios del esquema necesitan nuevas migraciones Prisma versionadas antes de subirlos. No uses `prisma db push` sobre la base publicada.
+## 6. Datos y actualizaciones
 
-En Railway, configura las copias de seguridad del volumen y verifica una restauracion antes de depender de ellas. Conserva tambien las variables privadas en un gestor de secretos. Eliminar el volumen elimina la base y las fotos. Esta guia crea una base nueva; importar una base previa exige revisar el esquema y su historial de migraciones.
+Con GitHub conectado, los cambios en main pueden disparar nuevos despliegues segun la configuracion de cada plataforma. Los cambios del esquema necesitan migraciones Prisma versionadas. No uses `prisma db push` sobre la base publicada.
 
-Revisa precios, limites, elegibilidad del plan y consumo en cada plataforma antes de activar un plan. No se presupone alojamiento gratuito ni se ha medido la carga maxima de este proyecto.
+Solo lo que esta en `/var/data` persiste en Render. No borres el disco. Guarda copias coherentes de SQLite y de las fotos fuera del servicio y prueba la restauracion. No dependas exclusivamente de las instantaneas del disco como respaldo de una base en uso. Los servicios con disco no escalan a varias instancias y los despliegues interrumpen temporalmente las conexiones.
 
-## Problemas habituales
+## Diagnostico
 
 | Problema | Revisa |
 | --- | --- |
-| Railway no compila | Root Directory, Config File Path y uso del Dockerfile |
-| Permission denied o unable to open database | Volumen en `/app/data`, DATABASE_URL y `RAILWAY_RUN_UID=0` |
-| Healthcheck falla | `PORT=8080`, Target Port 8080 y logs de migraciones/arranque |
-| Login no funciona | Variables VITE con la URL real, nuevo deploy en Vercel y creacion del admin en logs |
-| Peticiones van a localhost | Variables de Vercel ausentes o despliegue anterior |
-| Fotos desaparecen | UPLOADS_DIR debe ser `/app/data/uploads`, dentro del volumen |
-| Sensores no conectan | URL Railway, HTTPS/TLS del dispositivo y conexion Socket.IO directa a Railway |
-| Cambio de variables no aparece | Aplica cambios y redespliega la plataforma correspondiente |
+| Build falla | Root Directory, Node 22 y logs de npm/Prisma |
+| No aparecen tablas | Logs de `start:render`, DATABASE_URL y montaje del disco |
+| Health check falla | Logs de arranque, `/health` y variable PORT sin sobrescribir |
+| Datos o fotos desaparecen | Disco en `/var/data` y rutas DATABASE_URL/UPLOADS_DIR |
+| Login falla | Variables VITE, nuevo despliegue Vercel y creacion del administrador |
+| Sensor no conecta | URL Render, HTTPS/TLS y Socket.IO directo al backend |
 
 ## Limites antes de usar datos reales
 
-El codigo actual no verifica JWT ni permisos en varias rutas de pacientes, sesiones, perfiles y telemetria; el registro permite solicitar el rol ADMIN. CORS permite origenes externos y no constituye autenticacion. El despliegue publico sirve para pruebas con datos ficticios; antes de usar informacion real deben implementarse y verificarse esos controles de acceso, incluido Socket.IO y dispositivos.
+El codigo actual no verifica JWT ni permisos en varias rutas de pacientes, sesiones, perfiles y telemetria; el registro permite solicitar el rol ADMIN. CORS no constituye autenticacion. Usa datos ficticios hasta implementar y verificar esos controles, incluidos dispositivos y Socket.IO.
 
-Validado localmente: compilacion de frontend y backend, arranque con PORT=8080, migracion inicial y segunda ejecucion sin cambios, creacion del administrador, login desde otro origen, gateway, listado de pacientes, handshake Socket.IO y conexion WebSocket a traves del gateway. Los archivos JSON de despliegue tienen sintaxis valida. No se ha ejecutado el contenedor Docker en esta maquina.
-
-La publicacion en tus cuentas, los dominios asignados, la persistencia real del volumen y los sensores fisicos deben comprobarse en las plataformas.
+Los componentes comunes se comprobaron localmente en la preparacion anterior: compilacion, migraciones, administrador, login y WebSocket a traves del gateway. Los recursos de Render, sus permisos de disco, la persistencia real y el firmware deben comprobarse tras el despliegue. No se ha contratado ni creado un servicio de Render desde esta sesion.

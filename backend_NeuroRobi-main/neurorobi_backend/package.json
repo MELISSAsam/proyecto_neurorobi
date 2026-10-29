@@ -14,6 +14,7 @@
     "build": "tsc",
     "start": "node dist/services/api-gateway/index.js",
     "start:railway": "node scripts/migrate.cjs && node scripts/bootstrap-admin.cjs && npm run start:prod -- --kill-others",
+    "start:render": "node scripts/migrate.cjs && node scripts/bootstrap-admin.cjs && npm run start:prod -- --kill-others",
     "start:prod": "concurrently \"node dist/services/service-registry/index.js\" \"node dist/services/api-gateway/index.js\" \"node dist/services/auth-service/index.js\" \"node dist/services/patient-service/index.js\" \"node dist/services/session-service/index.js\" \"node dist/services/telemetry-service/index.js\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
