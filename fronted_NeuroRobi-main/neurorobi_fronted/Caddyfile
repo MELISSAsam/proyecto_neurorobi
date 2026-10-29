@@ -1,0 +1,12 @@
+{$SITE_ADDRESS:localhost} {
+    encode zstd gzip
+    @backend path /api/* /uploads/* /socket.io /socket.io/* /health
+    handle @backend {
+        reverse_proxy backend:3001
+    }
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+}

@@ -1,0 +1,54 @@
+name: neurorobi
+services:
+  migrate:
+    image: neurorobi-backend:local
+    build: ./backend_NeuroRobi-main/neurorobi_backend
+    command: ["node", "scripts/migrate.cjs"]
+    environment:
+      DATABASE_URL: file:/app/data/neurorobi.db
+    volumes:
+      - database:/app/data
+    restart: "no"
+  backend:
+    image: neurorobi-backend:local
+    build: ./backend_NeuroRobi-main/neurorobi_backend
+    init: true
+    command: ["npm", "run", "start:prod", "--", "--kill-others"]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: file:/app/data/neurorobi.db
+      JWT_SECRET: ${JWT_SECRET:?Completa JWT_SECRET en .env}
+      UPLOADS_DIR: /app/uploads
+      SEED_DEMO_DATA: "false"
+    volumes:
+      - database:/app/data
+      - uploads:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+  web:
+    build: ./fronted_NeuroRobi-main/neurorobi_fronted
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-http://localhost}
+    ports:
+      - "127.0.0.1:80:80"
+      - "127.0.0.1:443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+volumes:
+  database:
+  uploads:
+  caddy_data:
+  caddy_config:
