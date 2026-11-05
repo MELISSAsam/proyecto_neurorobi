@@ -85,7 +85,9 @@ app.use('/api', (req, res, next) => {
     const token = req.get('authorization')?.match(/^Bearer (.+)$/i)?.[1];
     if (!token) throw new Error('Missing token');
     const user = jwt.verify(token, process.env.JWT_SECRET || 'neurorobi-secret-key-2026') as JwtPayload;
-    if (normalizedRoute === '/auth/register' && user.role !== 'ADMIN') {
+    const singleUser = process.env.SINGLE_USER_USERNAME?.trim().toLowerCase();
+    if (singleUser && user.email !== singleUser) throw new Error('Inactive account');
+    if (normalizedRoute === '/auth/register' && (singleUser || user.role !== 'ADMIN')) {
       res.status(403).json({ error: 'Solo administradores pueden registrar especialistas' });
       return;
     }

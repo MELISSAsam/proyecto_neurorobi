@@ -85,3 +85,19 @@ La compilacion local y las pruebas aisladas no sustituyen esta comprobacion en l
 ## Alternativas existentes
 
 `render.yaml` conserva la alternativa anterior en Render y `compose.yaml` el despliegue Docker local. Para el flujo de esta guia utiliza Vercel y Railway.
+
+## Acceso unico de Melissa
+
+El login muestra un solo formulario de usuario y contrase?a, sin perfiles de demostracion.
+Para activar este modo en Railway agrega `SINGLE_USER_USERNAME=melissa` y configura
+`SINGLE_USER_PASSWORD` con la clave elegida. Estas variables tienen prioridad sobre
+INITIAL_ADMIN_EMAIL e INITIAL_ADMIN_PASSWORD; puedes retirar esas dos variables anteriores.
+Conserva SINGLE_USER_USERNAME y SINGLE_USER_PASSWORD en Railway: el arranque crea o actualiza
+la cuenta, almacenando la contrase?a con bcrypt. El identificador se guarda en el campo
+interno email por compatibilidad con el esquema; no necesita tener formato de correo.
+Solo esa cuenta puede iniciar sesion o usar API/Socket.IO y se bloquea el registro de
+otros especialistas. Las cuentas y sesiones antiguas se conservan en la base.
+Para cambiar la clave en este modo, cambia SINGLE_USER_PASSWORD y redespliega.
+Publica los cambios del backend en Railway y los del frontend en Vercel; luego cierra
+cualquier sesion anterior e ingresa con el usuario configurado. La contrase?a no se
+incluye en el codigo ni en las variables VITE del navegador.

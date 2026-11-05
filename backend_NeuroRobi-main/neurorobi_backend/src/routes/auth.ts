@@ -87,6 +87,12 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     const cleanEmail = email.toLowerCase().trim();
+    const singleUser = process.env.SINGLE_USER_USERNAME?.trim().toLowerCase();
+    if (singleUser && cleanEmail !== singleUser) {
+      res.status(401).json({ error: 'Credenciales invalidas' });
+      return;
+    }
+
 
     // Find specialist
     const specialist = await prisma.specialist.findUnique({

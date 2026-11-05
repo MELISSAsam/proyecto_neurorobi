@@ -172,7 +172,9 @@ setInterval(() => {
 
 io.use((socket, next) => {
   try {
-    jwt.verify(socket.handshake.auth.token, process.env.JWT_SECRET || 'neurorobi-secret-key-2026');
+    const user = jwt.verify(socket.handshake.auth.token, process.env.JWT_SECRET || 'neurorobi-secret-key-2026');
+    const singleUser = process.env.SINGLE_USER_USERNAME?.trim().toLowerCase();
+    if (singleUser && (typeof user === 'string' || user.email !== singleUser)) throw new Error('Inactive account');
     next();
   } catch {
     next(new Error('Sesion invalida o expirada'));
