@@ -8,3 +8,7 @@ dist
 prisma/*.db
 uploads
 .git
+
+*.db.*
+scratch
+Microsoft

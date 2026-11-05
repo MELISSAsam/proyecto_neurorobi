@@ -1,3 +1,4 @@
+import jwt from 'jsonwebtoken';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
@@ -19,6 +20,7 @@ const io = new Server(httpServer, {
 });
 
 app.use(cors());
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use(express.json());
 
 // ────────────────────────────────────
@@ -167,6 +169,15 @@ setInterval(() => {
     }
   });
 }, HEARTBEAT_CHECK_INTERVAL_MS);
+
+io.use((socket, next) => {
+  try {
+    jwt.verify(socket.handshake.auth.token, process.env.JWT_SECRET || 'neurorobi-secret-key-2026');
+    next();
+  } catch {
+    next(new Error('Sesion invalida o expirada'));
+  }
+});
 
 io.on('connection', (socket) => {
   console.log(`[Socket] Client connected: ${socket.id}`);

@@ -22,9 +22,8 @@ export const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (_req, file, cb) => {
-    const allowed = /jpeg|jpg|png|gif|webp/i;
-    const mimeOk = allowed.test(file.mimetype);
-    const extOk = allowed.test(path.extname(file.originalname).toLowerCase());
+    const mimeOk = /^image\/(jpeg|png|gif|webp)$/i.test(file.mimetype);
+    const extOk = /^\.(jpeg|jpg|png|gif|webp)$/i.test(path.extname(file.originalname));
     if (mimeOk && extOk) {
       cb(null, true);
     } else {

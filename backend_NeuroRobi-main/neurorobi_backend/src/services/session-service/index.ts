@@ -9,6 +9,7 @@ dotenv.config();
 
 const app = express();
 app.use(cors());
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use(express.json({ limit: '5mb' }));
 
 app.use('/uploads', express.static(process.env.UPLOADS_DIR || path.join(process.cwd(), 'uploads')));

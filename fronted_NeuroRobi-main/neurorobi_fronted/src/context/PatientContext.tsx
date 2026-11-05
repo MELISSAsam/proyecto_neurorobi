@@ -43,8 +43,9 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
         console.error("Failed to load initial data from backend", err);
       }
     };
-    fetchData();
-  }, []);
+    if (user) void fetchData();
+    else { setPatients([]); setSessions([]); }
+  }, [user]);
 
   // Register New Patient
   const registerPatient = async (

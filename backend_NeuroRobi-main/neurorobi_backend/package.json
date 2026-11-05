@@ -15,8 +15,9 @@
     "start": "node dist/services/api-gateway/index.js",
     "start:railway": "node scripts/migrate.cjs && node scripts/bootstrap-admin.cjs && npm run start:prod -- --kill-others",
     "start:render": "node scripts/migrate.cjs && node scripts/bootstrap-admin.cjs && npm run start:prod -- --kill-others",
-    "start:prod": "concurrently \"node dist/services/service-registry/index.js\" \"node dist/services/api-gateway/index.js\" \"node dist/services/auth-service/index.js\" \"node dist/services/patient-service/index.js\" \"node dist/services/session-service/index.js\" \"node dist/services/telemetry-service/index.js\"",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start:prod": "concurrently \"node dist/services/service-registry/index.js\" \"node dist/services/api-gateway/index.js\" \"node dist/services/auth-service/index.js\" \"node dist/services/patient-service/index.js\" \"node dist/services/session-service/index.js\" \"node dist/services/telemetry-service/index.js\" --kill-others",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:deploy": "node scripts/test-deploy.cjs"
   },
   "keywords": [],
   "author": "",
@@ -39,7 +40,8 @@
     "pg": "^8.21.0",
     "prisma": "^7.8.0",
     "socket.io": "^4.8.3",
-    "ws": "^8.21.0"
+    "ws": "^8.21.0",
+    "dotenv": "^17.4.2"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -57,6 +59,8 @@
     "@prisma/engines@7.8.0": true,
     "better-sqlite3@12.11.1": true,
     "prisma@7.8.0": true
+  },
+  "engines": {
+    "node": "22.x"
   }
 }
-

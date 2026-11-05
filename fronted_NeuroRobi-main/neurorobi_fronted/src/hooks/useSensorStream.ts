@@ -122,7 +122,8 @@ export const useSensorStream = ({ isStreaming, onSpikeTriggered, patientId, devi
       resetStream();
 
       const newSocket = io(import.meta.env.VITE_WS_URL, {
-        transports: ['websocket', 'polling']
+        transports: ['websocket', 'polling'],
+        auth: (cb) => cb({ token: localStorage.getItem('neurorobi_auth_token') })
       });
       setSocket(newSocket);
 

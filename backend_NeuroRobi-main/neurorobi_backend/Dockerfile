@@ -18,4 +18,4 @@ ENV NODE_ENV=production
 USER node
 EXPOSE 3001
 
-CMD ["npm", "run", "start:prod"]
+CMD ["npm", "run", "start:railway"]

@@ -19,6 +19,7 @@ services:
       NODE_ENV: production
       DATABASE_URL: file:/app/data/neurorobi.db
       JWT_SECRET: ${JWT_SECRET:?Completa JWT_SECRET en .env}
+      TELEMETRY_API_KEY: ${TELEMETRY_API_KEY:?Completa TELEMETRY_API_KEY en .env}
       UPLOADS_DIR: /app/uploads
       SEED_DEMO_DATA: "false"
     volumes:
