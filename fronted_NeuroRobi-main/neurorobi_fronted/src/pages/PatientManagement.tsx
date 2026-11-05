@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatRegistrationDate } from '../utils/date';
 import { usePatients } from '../context/PatientContext';
 import { RegisterPatientModal } from '../components/forms/RegisterPatientModal';
 import { EditPatientModal } from '../components/forms/EditPatientModal';
@@ -229,7 +230,7 @@ export const PatientManagement: React.FC<PatientManagementProps> = ({
                         {selectedPatient.diagnosis}
                       </span>
                       <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
-                        <Calendar size={10} /> Registro: {selectedPatient.registeredAt}
+                        <Calendar size={10} /> Registro: {formatRegistrationDate(selectedPatient.registeredAt)}
                       </span>
                     </div>
                   </div>

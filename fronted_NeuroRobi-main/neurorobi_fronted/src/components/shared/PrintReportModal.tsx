@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatRegistrationDate } from '../../utils/date';
 import { X, Printer, Shield, FileText } from 'lucide-react';
 import type { ClinicalSession } from '../../types';
 import { usePatients } from '../../context/PatientContext';
@@ -22,7 +23,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   const patient = patients.find(p => p.id === session.patientId);
   const age = patient?.age || 7;
   const diagnosis = patient?.diagnosis || 'Diagnóstico Personalizado';
-  const registeredAt = patient?.registeredAt || session.date;
+  const registeredAt = formatRegistrationDate(patient?.registeredAt || session.date);
 
   const handlePrint = () => {
     window.print();
