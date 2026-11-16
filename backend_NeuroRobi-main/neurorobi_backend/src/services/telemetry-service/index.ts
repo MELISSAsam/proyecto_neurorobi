@@ -18,7 +18,8 @@ const sessionClient = new SessionClient();
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: '*' }
+  cors: { origin: '*' },
+  allowRequest: (req, callback) => callback(null, req.headers.origin !== 'https://proyecto-neurorobi-l9b7ucvwf-melissa-chuquis-projects.vercel.app')
 });
 
 app.use(cors());
@@ -217,8 +218,8 @@ app.post('/api/telemetry', async (req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', deviceConnected: true });
 });
 
-const HEARTBEAT_TIMEOUT_MS = 5000;
-const HEARTBEAT_CHECK_INTERVAL_MS = 1000;
+const HEARTBEAT_TIMEOUT_MS = 2000;
+const HEARTBEAT_CHECK_INTERVAL_MS = 500;
 
 // Periodic heartbeat checker: runs every second
 setInterval(() => {
@@ -234,6 +235,7 @@ setInterval(() => {
 
 io.use((socket, next) => {
   try {
+    if (socket.handshake.headers.origin === 'https://proyecto-neurorobi-l9b7ucvwf-melissa-chuquis-projects.vercel.app') throw new Error('Version antigua');
     const user = jwt.verify(socket.handshake.auth.token, process.env.JWT_SECRET || 'neurorobi-secret-key-2026');
     const singleUser = process.env.SINGLE_USER_USERNAME?.trim().toLowerCase();
     if (singleUser && (typeof user === 'string' || user.email !== singleUser)) throw new Error('Inactive account');

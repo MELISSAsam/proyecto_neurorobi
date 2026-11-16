@@ -8,6 +8,10 @@ import axios from 'axios';
 import { createServer } from 'http';
 
 const app = express();
+app.use((req, res, next) => {
+  if (req.headers.origin === 'https://proyecto-neurorobi-l9b7ucvwf-melissa-chuquis-projects.vercel.app') { res.status(403).json({ error: 'Abre la version actual de NeuroRobi' }); return; }
+  next();
+});
 app.use(cors());
 
 // Don't use express.json() here globally because it interferes with proxying POST requests.

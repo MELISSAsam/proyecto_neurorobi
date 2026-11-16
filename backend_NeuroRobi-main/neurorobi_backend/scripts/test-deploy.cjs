@@ -72,6 +72,7 @@ async function main() {
   assert.equal(session.sensorHistory[0].flexIzq, 750);
   assert.equal(session.sensorHistory[0].switchIzq, true);
   await request('/api/stats', { headers });
+  await request('/api/stats', { headers: { ...headers, Origin: 'https://proyecto-neurorobi-l9b7ucvwf-melissa-chuquis-projects.vercel.app' } }, 403);
   await request('/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-device-key': env.TELEMETRY_API_KEY }, body: JSON.stringify({ deviceType: 'oso', flexIzq: 750, apreton: true, flexDer: 1000, nivelDer: 6, switchIzq: true, switchDer: false, mpu: true, giroX: 3, giroY: 0, giroZ: 0, movimiento: 1 }) });
   const db = new (require('better-sqlite3'))(path.join(data, 'test.db'));
   const stored = db.prepare('SELECT payload FROM TelemetryPacket ORDER BY id DESC LIMIT 1').get();

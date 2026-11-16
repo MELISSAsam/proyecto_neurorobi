@@ -1,15 +1,13 @@
-# ESP32 Oso NeuroRobi
+# Peluche ESP32
 
-Abre NeuroRobi_Oso/NeuroRobi_Oso.ino en Arduino IDE. Selecciona ESP32 Dev Module e instala Adafruit GFX Library y Adafruit SSD1306 (con sus dependencias).
+Abre NeuroRobi_Oso/NeuroRobi_Oso.ino en Arduino IDE. Instala Adafruit GFX Library y Adafruit SSD1306, y selecciona ESP32 Dev Module.
 
-Completa WIFI_STA_SSID y WIFI_STA_PASS con una red de 2.4 GHz con Internet. Completa DEVICE_KEY con el valor TELEMETRY_API_KEY del backend Railway. No publiques el archivo con credenciales reales.
+Completa WIFI_STA_SSID, WIFI_STA_PASS (red 2.4 GHz con Internet) y DEVICE_KEY con TELEMETRY_API_KEY de Railway. No publiques credenciales.
 
-SERVER_URL apunta a https://neurorobi-backend-production.up.railway.app/api/telemetry. El dispositivo envia una lectura por segundo. El monitor serie a 115200 muestra SRV=OK(200) si el servidor acepta los datos.
+El firmware envia por HTTPS a Railway con conexion reutilizable. Prepara una lectura cada 100 ms; la velocidad efectiva depende de la red. La tarea de red usa solo la lectura mas reciente y no bloquea sensores ni OLED. No hay HTML, servidor web ni hotspot local. El backend almacena cada lectura recibida.
 
-Pines: flex apreton GPIO32 (ADC > 600), flex derecho GPIO33 (700 a 1300, nivel 1 a 10), switches GPIO18/19 a GND con INPUT_PULLUP, I2C SDA16/SCL4 para OLED SSD1306 y MPU6050. Alimenta y conecta los sensores segun sus especificaciones; entradas del ESP32 a 3.3V.
+Pines: flex 32/33, switches 18/19 a GND con INPUT_PULLUP, I2C SDA16/SCL4. Monitor serie 115200. SRV=OK(200) indica lectura aceptada; HTTP 401 indica clave incorrecta.
 
-La red local NeuroRobi_ESP32 conserva la clave NeuroRobi2026. Su pagina esta en http://192.168.4.1 y las lecturas JSON en /datos. Para la aplicacion publicada usa el envio del ESP32 a Railway y abre una sesion de paciente en la aplicacion; el servidor cloud no puede consultar la IP privada del oso.
+La interfaz espera mientras el peluche esta desconectado. El dominio antiguo l9b7ucvwf esta bloqueado para HTTP y Socket.IO. Abre la version actual desde Vercel.
 
-El oso no mide pulso ni frecuencia cardiaca. Los campos historicos de sesiones se conservan por compatibilidad; no son mediciones de este hardware. Las migraciones ya aplicadas se conservan para no alterar su historial.
-
-Pendiente de validar con el dispositivo fisico. HTTPS del firmware actual usa setInsecure: cifra el trafico pero no verifica el certificado del servidor.
+Pendiente compilar y validar en ESP32 fisico. HTTPS usa setInsecure, que no valida el certificado del servidor.

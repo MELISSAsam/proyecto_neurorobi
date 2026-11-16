@@ -23,7 +23,6 @@ import {
   Timer,
   Square,
   Sparkles,
-  Sliders,
   Play
 } from 'lucide-react';
 
@@ -40,8 +39,6 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
   const { activeRole } = useRole();
 
   const [isStreaming, setIsStreaming] = useState(true);
-  const [directIp, setDirectIp] = useState<string>('192.168.4.1');
-  const [useDirectWifi, setUseDirectWifi] = useState(false);
   const [triggers, setTriggers] = useState<string[]>([]);
   const [fatigueCheckmarks, setFatigueCheckmarks] = useState<Record<string, boolean>>({});
 
@@ -56,7 +53,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
     patientId: activePatient?.id,
     deviceType: 'oso',
     simulate: false,
-    directEsp32Ip: useDirectWifi ? directIp : null
+    directEsp32Ip: null
   });
 
   if (!activePatient) {
@@ -222,36 +219,13 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
             <span>{formatTime(oso.secondsElapsed)}</span>
           </div>
 
-          {/* Selector de Conexión Directa WiFi */}
-          {useDirectWifi && (
-            <input
-              type="text"
-              value={directIp}
-              onChange={(e) => setDirectIp(e.target.value)}
-              placeholder="192.168.4.1"
-              className="px-2 py-1 bg-white border border-indigo-200 rounded-xl text-[10px] font-mono text-indigo-900 w-28 outline-none focus:border-indigo-500 shadow-xs"
-              title="IP del ESP32 en modo Punto de Acceso"
-            />
-          )}
 
-          <button
-            onClick={() => setUseDirectWifi(!useDirectWifi)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase transition-all cursor-pointer ${
-              useDirectWifi 
-                ? 'bg-indigo-600 text-white border-indigo-700 shadow-sm' 
-                : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
-            }`}
-            title="Conectar directamente al AP WiFi del ESP32 (192.168.4.1)"
-          >
-            <Sliders size={12} />
-            <span>{useDirectWifi ? 'Directo AP' : 'Modo AP'}</span>
-          </button>
         </div>
 
       </div>
 
       {/* Si no hay datos ni conexión */}
-      {!oso.isDeviceConnected && oso.streamData.length === 0 ? (
+      {!oso.isDeviceConnected ? (
         <div className="bg-white border border-rose-100 rounded-3xl p-8 shadow-md max-w-2xl mx-auto text-center space-y-6 py-10 animate-in fade-in zoom-in-95 duration-300">
           <div className="relative mx-auto w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center text-amber-500 border border-amber-200 text-4xl">
             🐻
@@ -261,43 +235,8 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
           <div className="space-y-2">
             <h3 className="text-lg font-black text-slate-800">Esperando conexión del Peluche NeuroRobi</h3>
             <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-              Enciende el ESP32 del peluche. Puedes conectarte de dos maneras:
+              Enciende el peluche y espera su conexion a Internet. Las lecturas aparecen al recibir la senal del dispositivo.
             </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left text-xs max-w-xl mx-auto">
-            {/* Opción A */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-              <span className="text-[10px] font-black uppercase tracking-wider text-teal-700 block">
-                Opción 1: Vía Red Wi-Fi (HTTP POST)
-              </span>
-              <p className="text-[11px] text-slate-600">
-                El ESP32 envía sus datos por HTTP POST cada 100ms a la IP de esta PC en el puerto 3001:
-              </p>
-              <code className="block bg-slate-900 text-teal-300 p-2 rounded-lg text-[10px] font-mono break-all">
-                POST /api/telemetry
-              </code>
-            </div>
-
-            {/* Opción B */}
-            <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 space-y-2">
-              <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700 block">
-                Opción 2: Conexión Directa al Hotspot
-              </span>
-              <p className="text-[11px] text-slate-600">
-                Conéctate a la red WiFi del peluche:
-              </p>
-              <div className="bg-white p-2 rounded-lg border border-indigo-200 text-[10px] font-mono text-indigo-900">
-                SSID: <strong>NeuroRobi_ESP32</strong><br/>
-                Pass: <strong>NeuroRobi2026</strong>
-              </div>
-              <button
-                onClick={() => setUseDirectWifi(true)}
-                className="w-full mt-2 py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-black uppercase cursor-pointer"
-              >
-                Activar Lectura Directa (192.168.4.1)
-              </button>
-            </div>
           </div>
 
           <div className="flex justify-center items-center gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400 pt-2">

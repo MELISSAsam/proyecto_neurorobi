@@ -1,11 +1,13 @@
 #include <WiFi.h>
-#include <WebServer.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <math.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
 
 // =========================================================================
 // NEUROROBI ESP32 38 PINES - OSO TERAPÉUTICO CON ENVÍO AL SERVIDOR
@@ -25,10 +27,6 @@ const char* SERVER_URL = "https://neurorobi-backend-production.up.railway.app/ap
 // 3. Clave del dispositivo (debe coincidir con TELEMETRY_API_KEY en tu .env):
 const char* DEVICE_KEY = "TU_TELEMETRY_API_KEY";
 
-// 4. Modo Punto de Acceso propio del Oso (se mantiene activo):
-const char* WIFI_SSID = "NeuroRobi_ESP32";
-const char* WIFI_PASS = "NeuroRobi2026";
-
 // Pines de Hardware (100% tus pines originales sin cambios)
 const int FLEX_APRETON   = 32;
 const int FLEX_DERECHO   = 33;
@@ -40,11 +38,12 @@ const int UMBRAL_APRETON = 600; // ON solo cuando ADC > 600
 const int DER_MIN        = 700;
 const int DER_MAX        = 1300;
 
-WebServer server(80);
+struct Packet { char json[768]; };
+QueueHandle_t telemetryQueue;
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
 bool oledOK = false;
 bool mpuOK = false;
-bool servidorOK = false;
+volatile bool servidorOK = false;
 uint8_t mpuAddress = 0x68;
 
 int flexIzq = 0, flexDer = 0, nivelDer = 1;
@@ -200,73 +199,35 @@ String construirJSON() {
 // ENVÍO DE DATOS AL SERVIDOR (HTTP POST a /api/telemetry)
 // Soporta tanto HTTPS (servidor desplegado en nube) como HTTP (red local).
 // ─────────────────────────────────────────────────────────────────────────
-void enviarAlServidor() {
-  if (WiFi.status() != WL_CONNECTED || strlen(WIFI_STA_SSID) == 0) {
-    servidorOK = false;
-    return;
-  }
-
-  String payload = construirJSON();
-  bool esHttps = String(SERVER_URL).startsWith("https://");
-
-  if (esHttps) {
-    WiFiClientSecure client;
-    client.setInsecure(); // No requiere certificados SSL quemados
-    HTTPClient https;
-    if (https.begin(client, SERVER_URL)) {
-      https.addHeader("Content-Type", "application/json");
-      https.addHeader("x-device-key", DEVICE_KEY);
-      https.setTimeout(4000);
-      int code = https.POST(payload);
-      Serial.printf("Servidor HTTPS: %d (200=guardado, 401=revisar DEVICE_KEY)\n", code);
-      servidorOK = (code == 200 || code == 201);
-      https.end();
+// Red en tarea independiente: no bloquea sensores ni OLED y no acumula retraso.
+void telemetryTask(void*) {
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  http.setReuse(true);
+  http.setConnectTimeout(2000);
+  http.setTimeout(2000);
+  http.begin(client, SERVER_URL);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-device-key", DEVICE_KEY);
+  Packet packet;
+  unsigned long retryAt = 0;
+  for (;;) {
+    if (WiFi.status() != WL_CONNECTED) {
+      servidorOK = false;
+      if (millis() - retryAt > 10000) { retryAt = millis(); WiFi.reconnect(); }
+      vTaskDelay(pdMS_TO_TICKS(100));
+      continue;
     }
-  } else {
-    WiFiClient client;
-    HTTPClient http;
-    if (http.begin(client, SERVER_URL)) {
-      http.addHeader("Content-Type", "application/json");
-      http.addHeader("x-device-key", DEVICE_KEY);
-      http.setTimeout(4000);
-      int code = http.POST(payload);
-      servidorOK = (code == 200 || code == 201);
-      http.end();
+    if (xQueueReceive(telemetryQueue, &packet, pdMS_TO_TICKS(100)) == pdTRUE) {
+      int code = http.POST(String(packet.json));
+      servidorOK = code == 200;
+      if (!servidorOK) {
+        Serial.printf("Servidor HTTP: %d (401: revisar DEVICE_KEY)\n", code);
+        vTaskDelay(pdMS_TO_TICKS(500));
+      }
     }
   }
-}
-
-void enviarDatos() {
-  String j = construirJSON();
-  server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.sendHeader("Cache-Control", "no-store");
-  server.send(200, "application/json", j);
-}
-
-const char PAGINA[] PROGMEM = R"rawliteral(
-<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NeuroRobi</title>
-<style>
-*{box-sizing:border-box}body{margin:0;background:#0b1220;color:#f8fafc;font-family:Arial,sans-serif}header{text-align:center;padding:25px;background:#172238;border-bottom:1px solid #334155}h1{margin:0;color:#67e8f9;letter-spacing:3px}header p{color:#94a3b8}.wrap{max-width:1100px;margin:auto;padding:20px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px}.card{background:#172238;border:1px solid #334155;border-radius:18px;padding:20px}h2{font-size:18px;margin:0 0 15px}.value{font-size:38px;font-weight:bold;color:#67e8f9}.sub{font-size:13px;color:#94a3b8;margin-top:8px}.bar{background:#0b1220;border-radius:20px;height:14px;overflow:hidden;margin:15px 0}.fill{background:#22d3ee;width:0;height:100%;transition:width .2s}.purple{background:#a78bfa}.tag{padding:12px;border-radius:10px;background:#0b1220;color:#94a3b8;margin:8px 0}.on{background:#14532d;color:#86efac}.off{color:#fda4af}.flexsvg{width:100%;height:90px}canvas{width:100%;height:125px;background:#0b1220;border-radius:10px}footer{text-align:center;color:#94a3b8;padding:25px}
-</style></head><body><header><h1>NEUROROBI</h1><p>Monitoreo tactil y movimiento</p></header><main class="wrap"><div class="grid">
-<section class="card"><h2>Apreton - GPIO 32</h2><div class="value" id="apreton">--</div><div class="sub" id="rawIzq">ADC: -- | Umbral: 600</div><div class="tag" id="estado">Esperando lectura</div><canvas id="grafIzq" width="300" height="125"></canvas></section>
-<section class="card"><h2>Flex derecho - GPIO 33</h2><div class="value" id="nivelDer">-- / 10</div><div class="sub" id="rawDer">ADC: --</div><div class="bar"><div class="fill purple" id="barraDer"></div></div><svg class="flexsvg" viewBox="0 0 260 90"><path id="lineDer" d="M15 45 Q130 45 245 45" stroke="#a78bfa" stroke-width="7" stroke-linecap="round" fill="none"/></svg><canvas id="grafDer" width="300" height="125"></canvas></section>
-<section class="card"><h2>Finales de carrera</h2><div class="tag" id="swIzq">Izquierdo: --</div><div class="tag" id="swDer">Derecho: --</div></section>
-<section class="card"><h2>MPU6050</h2><div class="sub" id="mpuEstado">Comprobando...</div><div class="value" id="mov">--/100</div><div class="sub">Indicador relativo de giro</div><div class="bar"><div class="fill" id="barraMov"></div></div><div class="sub" id="giro">Giroscopio: --</div><div class="sub" id="acc">Acelerometro: --</div></section>
-</div></main><footer>NeuroRobi · ESP32 + OLED</footer>
-<script>
-const hi=[],hd=[],N=50;
-function push(a,v){a.push(v);if(a.length>N)a.shift()}
-function chart(id,a,max,color){let c=document.getElementById(id),x=c.getContext('2d'),w=c.width,h=c.height;x.clearRect(0,0,w,h);x.strokeStyle='#26364d';x.lineWidth=1;for(let i=1;i<4;i++){x.beginPath();x.moveTo(0,i*h/4);x.lineTo(w,i*h/4);x.stroke()}if(a.length<2)return;x.strokeStyle=color;x.lineWidth=3;x.beginPath();a.forEach((v,i)=>{let px=i*w/(N-1),py=h-v*h/max;i?x.lineTo(px,py):x.moveTo(px,py)});x.stroke()}
-function sw(id,on,n){let e=document.getElementById(id);e.className='tag'+(on?' on':'');e.textContent=n+': '+(on?'ACTIVADO':'LIBRE')}
-async function actualizar(){try{let r=await fetch('/datos',{cache:'no-store'});if(!r.ok)return;let d=await r.json();let a=document.getElementById('apreton');a.textContent=d.apreton?'ON':'OFF';a.style.color=d.apreton?'#86efac':'#fda4af';document.getElementById('rawIzq').textContent='ADC: '+d.flexIzq+' | Umbral: 600';let e=document.getElementById('estado');e.textContent=d.apreton?'APRETON DETECTADO':'SIN APRETON';e.className='tag'+(d.apreton?' on':'');document.getElementById('nivelDer').textContent=d.nivelDer+' / 10';document.getElementById('rawDer').textContent='ADC: '+d.flexDer;document.getElementById('barraDer').style.width=d.nivelDer*10+'%';document.getElementById('lineDer').setAttribute('d','M15 45 Q130 '+(45+d.nivelDer*3)+' 245 45');push(hi,d.apreton?1:0);push(hd,d.nivelDer);chart('grafIzq',hi,1,'#34d399');chart('grafDer',hd,10,'#a78bfa');sw('swIzq',d.switchIzq,'Izquierdo');sw('swDer',d.switchDer,'Derecho');document.getElementById('mpuEstado').textContent=d.mpu?'MPU6050 CONECTADO':'MPU6050 NO DETECTADO';document.getElementById('mov').textContent=d.movimiento.toFixed(1)+'/100';document.getElementById('barraMov').style.width=d.movimiento+'%';document.getElementById('giro').textContent='Giro X: '+d.giroX+' | Y: '+d.giroY+' | Z: '+d.giroZ;document.getElementById('acc').textContent='Acc X: '+d.accX+' | Y: '+d.accY+' | Z: '+d.accZ}catch(e){console.log('Esperando ESP32')}}
-setInterval(actualizar,300);actualizar();
-</script></body></html>
-)rawliteral";
-
-void paginaPrincipal() {
-  server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.sendHeader("Cache-Control", "no-store");
-  server.send_P(200, "text/html", PAGINA);
 }
 
 void setup() {
@@ -286,7 +247,8 @@ void setup() {
   actualizarOLED();
 
   // 1. Iniciar conexión a tu red Wi-Fi para enviar al servidor
-  WiFi.mode(WIFI_AP_STA);
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
   WiFi.setAutoReconnect(true);
   if (strlen(WIFI_STA_SSID) > 0) {
     WiFi.begin(WIFI_STA_SSID, WIFI_STA_PASS);
@@ -294,22 +256,14 @@ void setup() {
     Serial.println(WIFI_STA_SSID);
   }
 
-  // 2. Mantener activo el Hotspot propio del Oso por si deseas conexión directa
-  if (WiFi.softAP(WIFI_SSID, WIFI_PASS, 1, 0, 2)) {
-    Serial.print("WiFi AP OK: http://");
-    Serial.println(WiFi.softAPIP());
-  } else {
-    Serial.println("ERROR AL CREAR WIFI AP");
-  }
-
-  server.on("/", HTTP_GET, paginaPrincipal);
-  server.on("/datos", HTTP_GET, enviarDatos);
-  server.begin();
-  Serial.println("NeuroRobi Oso listo.");
+  telemetryQueue = xQueueCreate(1, sizeof(Packet));
+  if (!telemetryQueue) { Serial.println("Error creando cola de telemetria"); while (true) delay(1000); }
+  xTaskCreate(telemetryTask, "telemetry", 12288, nullptr, 1, nullptr);
+  Serial.println("Peluche listo: envio a Railway, sin servidor HTML local.");
 }
 
 void loop() {
-  server.handleClient();
+
   
   // Lectura de sensores cada 100ms
   if (millis() - tSensores >= 100) { 
@@ -323,10 +277,12 @@ void loop() {
     actualizarOLED(); 
   }
 
-  // Envío al servidor remoto desplegado cada 200ms
-  if (millis() - tServer >= 1000) {
+  // Envío al servidor remoto desplegado cada 100ms
+  if (millis() - tServer >= 100) {
     tServer = millis();
-    enviarAlServidor();
+    Packet packet;
+    construirJSON().toCharArray(packet.json, sizeof(packet.json));
+    xQueueOverwrite(telemetryQueue, &packet);
   }
 
   // Log serial cada segundo
