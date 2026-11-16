@@ -216,8 +216,9 @@ void enviarAlServidor() {
     if (https.begin(client, SERVER_URL)) {
       https.addHeader("Content-Type", "application/json");
       https.addHeader("x-device-key", DEVICE_KEY);
-      https.setTimeout(1200);
+      https.setTimeout(4000);
       int code = https.POST(payload);
+      Serial.printf("Servidor HTTPS: %d (200=guardado, 401=revisar DEVICE_KEY)\n", code);
       servidorOK = (code == 200 || code == 201);
       https.end();
     }
@@ -227,7 +228,7 @@ void enviarAlServidor() {
     if (http.begin(client, SERVER_URL)) {
       http.addHeader("Content-Type", "application/json");
       http.addHeader("x-device-key", DEVICE_KEY);
-      http.setTimeout(1200);
+      http.setTimeout(4000);
       int code = http.POST(payload);
       servidorOK = (code == 200 || code == 201);
       http.end();
@@ -286,6 +287,7 @@ void setup() {
 
   // 1. Iniciar conexión a tu red Wi-Fi para enviar al servidor
   WiFi.mode(WIFI_AP_STA);
+  WiFi.setAutoReconnect(true);
   if (strlen(WIFI_STA_SSID) > 0) {
     WiFi.begin(WIFI_STA_SSID, WIFI_STA_PASS);
     Serial.print("Conectando al Wi-Fi: ");

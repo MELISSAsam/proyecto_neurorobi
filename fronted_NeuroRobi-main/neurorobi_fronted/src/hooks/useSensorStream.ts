@@ -195,10 +195,10 @@ export const useSensorStream = ({
         setSocketConnected(false);
       });
 
-      let localSeconds = 0;
+      const startedAt = Date.now();
 
       const handleSensorData = (data: SensorReading) => {
-        localSeconds += 1;
+        const localSeconds = Math.floor((Date.now() - startedAt) / 1000);
         setSecondsElapsed(localSeconds);
 
         const sFlexIzq = typeof data.flexIzq !== 'undefined' ? data.flexIzq : data.hugForce;
@@ -263,7 +263,7 @@ export const useSensorStream = ({
           };
 
           const updated = [...prev, smoothedReading];
-          if (updated.length > 30) updated.shift();
+          // Conservar todas las lecturas para archivar la sesion completa.
           return updated;
         });
 

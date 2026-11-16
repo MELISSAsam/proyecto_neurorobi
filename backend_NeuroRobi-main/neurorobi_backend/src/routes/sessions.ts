@@ -30,6 +30,7 @@ function mapSessionResponse(session: any) {
     deviceType: normalizeDeviceType(session.deviceType),
     sensorHistory: (session.sensorHistory || []).map((reading: any) => ({
       ...reading,
+      ...(reading.payload ? JSON.parse(reading.payload) : {}),
       deviceType: normalizeDeviceType(reading.deviceType)
     })),
     spikesLog: (session.spikesLog || []).map((spike: any) => ({
@@ -197,7 +198,8 @@ router.post('/', async (req: Request, res: Response) => {
             rotationX: Number(s['rotationX']) || 0,
             rotationY: Number(s['rotationY']) || 0,
             rotationZ: Number(s['rotationZ']) || 0,
-            heartRate: Number(s['heartRate']) || 0
+            heartRate: -1,
+            payload: JSON.stringify(s)
           }))
         },
 

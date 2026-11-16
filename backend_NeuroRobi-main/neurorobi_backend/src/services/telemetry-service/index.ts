@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { prisma } from '../../shared/db';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import axios from 'axios';
@@ -75,7 +76,7 @@ app.get('/api/telemetry/poll-esp32', async (req: Request, res: Response) => {
 });
 
 // HTTP POST endpoint for ESP32 telemetry (Oso NeuroRobi)
-app.post('/api/telemetry', (req: Request, res: Response) => {
+app.post('/api/telemetry', async (req: Request, res: Response) => {
   const rawType = String(req.body.deviceType || 'oso').toLowerCase();
   if (rawType !== 'oso') { res.status(400).json({ error: 'Solo se admite el oso' }); return; }
   const deviceType: DeviceType = 'oso';
@@ -156,6 +157,14 @@ app.post('/api/telemetry', (req: Request, res: Response) => {
     switch2: switchDer,
     shakeIntensity: movimiento
   };
+
+  try {
+    await prisma.telemetryPacket.create({ data: { patientId: devicePatientMap.oso, payload: JSON.stringify(dataPayload) } });
+  } catch (error) {
+    console.error('[Telemetry storage]', error);
+    res.status(503).json({ error: 'No se pudo almacenar la lectura' });
+    return;
+  }
 
   const targetPatientId = devicePatientMap[deviceType] || devicePatientMap['oso'];
   if (targetPatientId) {
