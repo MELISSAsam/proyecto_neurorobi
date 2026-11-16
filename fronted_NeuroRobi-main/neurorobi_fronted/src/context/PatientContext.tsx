@@ -12,7 +12,7 @@ interface PatientContextType {
   updatePatient: (id: string, name: string, age: number, diagnosis: ClinicalDiagnosis, initialObservation: string, profileImage: File | null) => Promise<Patient | undefined>;
   deletePatient: (id: string) => Promise<boolean>;
   startSession: (patientId: string) => void;
-  endSession: (notes: string, durationSeconds: number, metrics: any, sensorHistory: any[], spikesLog: any[], deviceType?: 'pulsera' | 'oso') => void;
+  endSession: (notes: string, durationSeconds: number, metrics: any, sensorHistory: any[], spikesLog: any[], deviceType?: 'oso' | 'oso') => void;
   archiveSession: (session: ClinicalSession) => Promise<void>;
   clearActiveSession: () => void;
   selectPatient: (patient: Patient | null) => void;
@@ -177,7 +177,7 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
     metrics: any,
     sensorHistory: any[],
     spikesLog: any[],
-    deviceType?: 'pulsera' | 'oso'
+    deviceType?: 'oso' | 'oso'
   ) => {
     if (!activeSession) return;
 
@@ -188,7 +188,7 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
       metrics,
       sensorHistory,
       spikesLog,
-      deviceType: deviceType ?? (activeSession.deviceType || 'pulsera')
+      deviceType: deviceType ?? (activeSession.deviceType || 'oso')
     };
 
     setActiveSession(finalizedSession);

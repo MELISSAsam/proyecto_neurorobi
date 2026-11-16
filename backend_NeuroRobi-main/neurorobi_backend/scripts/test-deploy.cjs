@@ -70,7 +70,7 @@ async function main() {
   }) }, 201);
   assert.equal((await request(`/api/sessions/${session.id}`, { headers })).notes, 'Smoke session');
   await request('/api/stats', { headers });
-  await request('/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-device-key': env.TELEMETRY_API_KEY }, body: JSON.stringify({ deviceType: 'pulsera', heartRate: 80 }) });
+  await request('/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-device-key': env.TELEMETRY_API_KEY }, body: JSON.stringify({ deviceType: 'oso', flexIzq: 750, apreton: true, flexDer: 1000, nivelDer: 6, switchIzq: true, switchDer: false, mpu: true, giroX: 3, giroY: 0, giroZ: 0, movimiento: 1 }) });
   const { io } = require(path.resolve(root, '../../fronted_NeuroRobi-main/neurorobi_fronted/node_modules/socket.io-client'));
   for (const transport of ['websocket', 'polling']) {
     await new Promise((resolve, reject) => {

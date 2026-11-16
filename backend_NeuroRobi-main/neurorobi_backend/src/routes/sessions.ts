@@ -8,12 +8,12 @@ const patientClient = new PatientClient();
 const authClient = new AuthClient();
 
 // Helper function to map flat Prisma metrics into a nested metrics object expected by the frontend
-const normalizeDeviceType = (type: any): 'oso' | 'pulsera' => {
-  return String(type || 'oso').toLowerCase() === 'pulsera' ? 'pulsera' : 'oso';
+const normalizeDeviceType = (type: any): 'oso' => {
+  return 'oso';
 };
 
-const normalizeDeviceTypeForPrisma = (type: any): 'OSO' | 'PULSERA' => {
-  return String(type || 'oso').toLowerCase() === 'pulsera' ? 'PULSERA' : 'OSO';
+const normalizeDeviceTypeForPrisma = (type: any): 'OSO' => {
+  return 'OSO';
 };
 
 function mapSessionResponse(session: any) {

@@ -76,7 +76,7 @@ Despues de publicar, con datos ficticios comprueba:
 1. Health 200 e inicio de sesion desde Vercel.
 2. Registro de paciente con foto y edicion de perfil.
 3. Creacion y guardado de sesion e informe.
-4. Conexion Socket.IO y lecturas reales de pulsera/oso con la clave del dispositivo.
+4. Conexion Socket.IO y lecturas reales de oso con la clave del dispositivo.
 5. Persistencia de cuenta, pacientes, sesiones y fotos despues de redesplegar Railway.
 6. Acceso sin token rechazado en `/api/patients` y dispositivos sin clave rechazados en `/api/telemetry`.
 

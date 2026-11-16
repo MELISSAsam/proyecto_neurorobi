@@ -22,7 +22,7 @@ export interface Patient {
 
 export interface SensorReading {
   timestamp: string; // HH:MM:SS
-  deviceType: 'oso' | 'pulsera';
+  deviceType: 'oso';
   // Métricas del Oso NeuroRobi (ESP32)
   flexIzq?: number;    // ADC GPIO 32 (Apretón)
   flexDer?: number;    // ADC GPIO 33 (Flexión derecha)
@@ -52,7 +52,7 @@ export interface SensorReading {
 }
 
 export interface SpikesLogItem {
-  deviceType: 'oso' | 'pulsera';
+  deviceType: 'oso';
   id: string;
   timestamp: string; // HH:MM:SS
   type: 'Presión' | 'Frecuencia Cardíaca' | 'Cinemática' | 'Flexión Articular';
@@ -83,7 +83,7 @@ export interface ClinicalSession {
   durationSeconds: number;
   specialistRole: SpecialistRole;
   notes: string;
-  deviceType: 'oso' | 'pulsera';
+  deviceType: 'oso';
   metrics: SessionMetrics;
   sensorHistory: SensorReading[];
   spikesLog: SpikesLogItem[];

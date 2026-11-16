@@ -20,7 +20,6 @@ model Patient {
 
 enum DeviceType {
   OSO
-  PULSERA
 }
 
 model ClinicalSession {
@@ -58,7 +57,7 @@ model SensorReading {
   id          Int             @id @default(autoincrement())
   sessionId   String
   timestamp   String
-  deviceType  DeviceType      @default(PULSERA)
+  deviceType  DeviceType      @default(OSO)
   hugForce    Float
   rotationX   Float
   rotationY   Float
@@ -72,7 +71,7 @@ model SpikesLogItem {
   id          String          @id @default(uuid())
   sessionId   String
   timestamp   String
-  deviceType  DeviceType      @default(PULSERA)
+  deviceType  DeviceType      @default(OSO)
   type        String
   value       Float
   alertText   String

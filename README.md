@@ -1,6 +1,6 @@
 # NeuroRobi - Plataforma Terapéutica IoT (Oso NeuroRobi)
 
-El sistema ha sido completamente adaptado para trabajar **únicamente con el Oso Terapéutico NeuroRobi**, eliminando por completo la pulsera de todos los módulos, dashboards clínicos, bases de datos y vistas de telemetría.
+El sistema ha sido completamente adaptado para trabajar **únicamente con el Oso Terapéutico NeuroRobi**, con sensores de flexión, finales de carrera y MPU6050.
 
 ---
 

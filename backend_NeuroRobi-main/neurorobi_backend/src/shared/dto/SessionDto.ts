@@ -7,7 +7,7 @@ export interface SessionDto {
   specialistRole: string;
   specialistId: string;
   notes: string;
-  deviceType: 'PULSERA' | 'OSO';
+  deviceType: 'OSO';
   metrics: {
     avgHeartRate: number;
     maxHeartRate: number;
@@ -29,7 +29,7 @@ export interface SessionBasicDto {
   date: Date;
   durationSeconds: number;
   specialistRole: string;
-  deviceType: 'PULSERA' | 'OSO';
+  deviceType: 'OSO';
 }
 
 export interface SessionStatsDto {

@@ -7,7 +7,7 @@ interface UseSensorStreamProps {
   isStreaming: boolean;
   onSpikeTriggered?: (spike: SpikesLogItem) => void;
   patientId?: string;
-  deviceType?: 'oso' | 'pulsera';
+  deviceType?: 'oso';
   simulate?: boolean;
   directEsp32Ip?: string | null; // e.g. '192.168.4.1' para lectura directa WiFi
 }
@@ -25,7 +25,6 @@ export const useSensorStream = ({
   const [secondsElapsed, setSecondsElapsed] = useState(0);
   const [isDeviceConnected, setIsDeviceConnected] = useState(false);
   const [isFsrConnected, setIsFsrConnected] = useState(false);
-  const [isPulseConnected, setIsPulseConnected] = useState(false);
   const [isGyroConnected, setIsGyroConnected] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
   
@@ -60,7 +59,6 @@ export const useSensorStream = ({
   const [maxGripForce, setMaxGripForce] = useState(0);
   const [bilateralTouchSync, setBilateralTouchSync] = useState(70);
   const [stereotypicalTicks, setStereotypicalTicks] = useState(0);
-  const [avgHeartRate, setAvgHeartRate] = useState(0);
   const [avgHugForce, setAvgHugForce] = useState(30);
 
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -83,11 +81,9 @@ export const useSensorStream = ({
     setMaxGripForce(0);
     setBilateralTouchSync(75);
     setStereotypicalTicks(0);
-    setAvgHeartRate(0);
     setAvgHugForce(30);
     setIsDeviceConnected(false);
     setIsFsrConnected(false);
-    setIsPulseConnected(false);
     setIsGyroConnected(false);
     setStrongShakeCount(0);
     strongShakeActiveRef.current = false;
@@ -286,7 +282,6 @@ export const useSensorStream = ({
         setIsFsrConnected(true);
         setMaxGripForce(prev => Math.max(prev, sNivelDer * 10));
         setAvgHugForce(prev => Math.round((prev * 0.9) + ((sNivelDer * 10) * 0.1)));
-        setIsPulseConnected(false); // No hay pulsera
         setIsGyroConnected(sMpu);
 
         // Coordinación táctil bilateral: si ambos switches están o estuvieron activos
@@ -430,11 +425,9 @@ export const useSensorStream = ({
     maxGripForce,
     bilateralTouchSync,
     stereotypicalTicks,
-    avgHeartRate,
     avgHugForce,
     isDeviceConnected,
     isFsrConnected,
-    isPulseConnected,
     isGyroConnected,
     socketConnected,
     switch1Pressed,

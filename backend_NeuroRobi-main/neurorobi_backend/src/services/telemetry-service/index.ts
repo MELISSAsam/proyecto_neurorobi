@@ -29,11 +29,11 @@ app.use(express.json());
 // Using Feign Clients to communicate with Patient and Session Services
 // ────────────────────────────────────
 
-type DeviceType = 'oso' | 'pulsera';
-const DEVICE_TYPES: DeviceType[] = ['oso', 'pulsera'];
-const lastTelemetryTime: Record<DeviceType, number> = { oso: 0, pulsera: 0 };
-const deviceConnections: Record<DeviceType, boolean> = { oso: false, pulsera: false };
-const devicePatientMap: Record<DeviceType, string | null> = { oso: null, pulsera: null };
+type DeviceType = 'oso';
+const DEVICE_TYPES: DeviceType[] = ['oso'];
+const lastTelemetryTime: Record<DeviceType, number> = { oso: 0 };
+const deviceConnections: Record<DeviceType, boolean> = { oso: false };
+const devicePatientMap: Record<DeviceType, string | null> = { oso: null };
 
 interface PatientStreamPayload {
   patientId: string;
@@ -77,7 +77,8 @@ app.get('/api/telemetry/poll-esp32', async (req: Request, res: Response) => {
 // HTTP POST endpoint for ESP32 telemetry (Oso NeuroRobi)
 app.post('/api/telemetry', (req: Request, res: Response) => {
   const rawType = String(req.body.deviceType || 'oso').toLowerCase();
-  const deviceType: DeviceType = rawType === 'pulsera' ? 'pulsera' : 'oso';
+  if (rawType !== 'oso') { res.status(400).json({ error: 'Solo se admite el oso' }); return; }
+  const deviceType: DeviceType = 'oso';
 
   // 1. Flex Apretón (GPIO 32): flexIzq (ADC), apreton (bool > 600)
   const flexIzq = typeof req.body.flexIzq !== 'undefined'
@@ -114,7 +115,7 @@ app.post('/api/telemetry', (req: Request, res: Response) => {
 
   // Mapeo retrocompatible
   const hForce = Math.min(100, Math.max(0, nivelDer * 10));
-  const hRate = typeof req.body.heartRate === 'undefined' ? -1 : Number(req.body.heartRate) || 0;
+  const hRate = -1; // Este hardware no mide frecuencia cardiaca.
 
   // Mark device as connected and update timestamp
   lastTelemetryTime[deviceType] = Date.now();
@@ -203,17 +204,6 @@ app.post('/api/telemetry', (req: Request, res: Response) => {
     });
   }
 
-  if (hRate > 120) {
-    io.emit('spike-triggered', {
-      id: `spk-real-hr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      deviceType,
-      timestamp: nowStr,
-      type: 'Frecuencia Cardíaca',
-      value: hRate,
-      alertText: `Taquicardia transitoria detectada: ${hRate} lpm.`,
-      severity: 'critical'
-    });
-  }
 
   res.status(200).json({ status: 'ok', deviceConnected: true });
 });
@@ -248,7 +238,8 @@ io.on('connection', (socket) => {
   console.log(`[Socket] Client connected: ${socket.id}`);
 
   socket.on('start-stream', (payload: PatientStreamPayload) => {
-    const { patientId, deviceType } = payload;
+    const { patientId } = payload;
+    const deviceType: DeviceType = 'oso';
     const patientRoom = getPatientRoom(patientId);
 
     console.log(`[Socket] Starting telemetry stream for patient: ${patientId}, device: ${deviceType}`);
