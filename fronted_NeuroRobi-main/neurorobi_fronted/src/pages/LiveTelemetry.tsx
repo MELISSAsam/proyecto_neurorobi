@@ -49,7 +49,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
     onShowSuccessToast(`⚠️ ${spike.type}: ${spike.alertText}`);
   };
 
-  // Stream exclusivo del Oso NeuroRobi
+  // Stream exclusivo del Peluche NeuroRobi
   const oso = useSensorStream({
     isStreaming,
     onSpikeTriggered: handleSpikeTriggered,
@@ -75,7 +75,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
         <Activity className="text-teal-600 mx-auto mb-4 animate-pulse" size={48} />
         <h2 className="text-base font-bold text-slate-700">Sin Paciente Activo</h2>
         <p className="text-xs text-slate-400 font-semibold mt-1 mb-6">
-          Selecciona o inicia una sesión con un paciente para transmitir la telemetría del Oso NeuroRobi.
+          Selecciona o inicia una sesión con un paciente para transmitir la telemetría del Peluche NeuroRobi.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
@@ -123,7 +123,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
 
   const handleEndSession = () => {
     if (!oso.isDeviceConnected && oso.streamData.length === 0) {
-      onShowSuccessToast(`❌ No se puede finalizar sesión: No se han recibido lecturas del Oso.`);
+      onShowSuccessToast(`❌ No se puede finalizar sesión: No se han recibido lecturas del Peluche.`);
       return;
     }
 
@@ -166,7 +166,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
   return (
     <div className="space-y-6">
       
-      {/* ─── Top Control Bar: Estado del Oso y Conexión ─── */}
+      {/* ─── Top Control Bar: Estado del Peluche y Conexión ─── */}
       <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
         
         {/* Dispositivo y Paciente */}
@@ -176,7 +176,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
           </div>
           <div>
             <h2 className="text-sm font-black text-slate-800 flex items-center gap-2">
-              Oso NeuroRobi · Telemetría Clínica
+              Peluche NeuroRobi · Telemetría Clínica
             </h2>
             <p className="text-[11px] text-slate-400 font-bold">
               Paciente: <span className="text-teal-700">{activePatient.name}</span> ({activePatient.diagnosis})
@@ -191,12 +191,12 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
           {oso.isDeviceConnected ? (
             <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 rounded-xl shadow-xs">
               <span className="h-2.5 w-2.5 bg-emerald-500 rounded-full animate-ping"></span>
-              <span className="text-[10px] font-black uppercase tracking-wider">OSO CONECTADO</span>
+              <span className="text-[10px] font-black uppercase tracking-wider">PELUCHE CONECTADO</span>
             </div>
           ) : (
             <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-800 px-3 py-1.5 rounded-xl shadow-xs">
               <span className="h-2.5 w-2.5 bg-rose-500 rounded-full animate-pulse"></span>
-              <span className="text-[10px] font-black uppercase tracking-wider">OSO DESCONECTADO</span>
+              <span className="text-[10px] font-black uppercase tracking-wider">PELUCHE DESCONECTADO</span>
             </div>
           )}
 
@@ -259,9 +259,9 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
           </div>
 
           <div className="space-y-2">
-            <h3 className="text-lg font-black text-slate-800">Esperando conexión del Oso NeuroRobi</h3>
+            <h3 className="text-lg font-black text-slate-800">Esperando conexión del Peluche NeuroRobi</h3>
             <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-              Enciende el ESP32 del oso. Puedes conectarte de dos maneras:
+              Enciende el ESP32 del peluche. Puedes conectarte de dos maneras:
             </p>
           </div>
 
@@ -285,7 +285,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
                 Opción 2: Conexión Directa al Hotspot
               </span>
               <p className="text-[11px] text-slate-600">
-                Conéctate a la red WiFi del oso:
+                Conéctate a la red WiFi del peluche:
               </p>
               <div className="bg-white p-2 rounded-lg border border-indigo-200 text-[10px] font-mono text-indigo-900">
                 SSID: <strong>NeuroRobi_ESP32</strong><br/>
@@ -302,12 +302,12 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
 
           <div className="flex justify-center items-center gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400 pt-2">
             <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping"></span>
-            <span>Escuchando sensores del oso (ADC 32, 33 / SW 18, 19 / MPU6050)...</span>
+            <span>Escuchando sensores del peluche (ADC 32, 33 / SW 18, 19 / MPU6050)...</span>
           </div>
         </div>
       ) : (
         <>
-          {/* ─── 4 Tarjetas de Sensores del Oso (Conforme al código ESP32) ─── */}
+          {/* ─── 4 Tarjetas de Sensores del Peluche (Conforme al código ESP32) ─── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             
             {/* Tarjeta 1: Apretón - GPIO 32 */}
@@ -543,13 +543,13 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
             )}
           </div>
 
-          {/* ─── Gráficos en Tiempo Real Recharts (Oso NeuroRobi) ─── */}
+          {/* ─── Gráficos en Tiempo Real Recharts (Peluche NeuroRobi) ─── */}
           <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Activity size={16} className="text-teal-600 animate-pulse" />
                 <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                  Dinámica de Telemetría Continua (Oso NeuroRobi)
+                  Dinámica de Telemetría Continua (Peluche NeuroRobi)
                 </h3>
               </div>
               <div className="flex items-center gap-3 text-[10px] font-bold uppercase text-slate-400">
@@ -651,7 +651,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
           {/* ─── Control Maestro: Finalizar Sesión Terapéutica ─── */}
           <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex flex-col justify-center items-center max-w-xl mx-auto">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
-              Control de Sesión Clínica (Oso NeuroRobi)
+              Control de Sesión Clínica (Peluche NeuroRobi)
             </span>
             
             <button
@@ -663,7 +663,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
             </button>
             
             <span className="text-[9px] text-slate-400 mt-2 font-bold uppercase tracking-wider text-center">
-              Consolida métricas del oso en el expediente del paciente
+              Consolida métricas del peluche en el expediente del paciente
             </span>
           </div>
         </>

@@ -355,7 +355,7 @@ export const PatientManagement: React.FC<PatientManagementProps> = ({
                                   {sess.specialistRole.replace('_', ' ')}
                                 </span>
                                 <span className="text-slate-400">•</span>
-                                <span className="text-slate-500 uppercase font-bold">Oso NeuroRobi</span>
+                                <span className="text-slate-500 uppercase font-bold">Peluche NeuroRobi</span>
                               </div>
                               <div className="flex flex-wrap gap-1 text-[9px] font-bold uppercase">
                                 <span className="bg-purple-50 text-purple-700 px-1 rounded">Flex Ø {Math.round((sess.metrics.avgHugForce || 10) / 10)}/10</span>
@@ -394,7 +394,7 @@ export const PatientManagement: React.FC<PatientManagementProps> = ({
                                     {sess.specialistRole.replace('_', ' ')}
                                   </span>
                                 </td>
-                                <td className="py-2.5 text-slate-500 uppercase text-[10px] font-bold hidden lg:table-cell">Oso NeuroRobi</td>
+                                <td className="py-2.5 text-slate-500 uppercase text-[10px] font-bold hidden lg:table-cell">Peluche NeuroRobi</td>
                                 <td className="py-2.5 font-medium text-slate-500">{sess.durationSeconds} s</td>
                                 <td className="py-2.5 hidden md:table-cell">
                                   <div className="flex gap-1 text-[9px] font-bold uppercase">

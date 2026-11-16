@@ -55,7 +55,7 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
         <AlertTriangle className="text-slate-400 mx-auto mb-4" size={48} />
         <h2 className="text-base font-bold text-slate-700">Sin Reporte de Sesión Activo</h2>
         <p className="text-xs text-slate-400 font-semibold mt-1 mb-6">
-          Inicia y finaliza una consulta terapéutica con el Oso NeuroRobi, o carga datos demo.
+          Inicia y finaliza una consulta terapéutica con el Peluche NeuroRobi, o carga datos demo.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
@@ -103,7 +103,7 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
     return activeTab === 'gyro' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:bg-slate-50 text-slate-600';
   };
 
-  // Muestras reales del Oso
+  // Muestras reales del Peluche
   const flexDerSamples = sensorHistory
     .map((r: any) => Number(r.nivelDer ?? (r.hugForce ? Math.round(r.hugForce / 10) : 0)))
     .filter(v => v > 0);
@@ -132,7 +132,7 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
         <div>
           <span className="text-[10px] font-bold text-teal-600 uppercase tracking-widest block mb-1">Diagnóstico Post-Sesión</span>
           <h2 className="text-lg font-black text-slate-800 tracking-tight">Reporte Clínico: {activeSession.patientName}</h2>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">Expediente temporal del Oso NeuroRobi archivado para auditoría.</p>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">Expediente temporal del Peluche NeuroRobi archivado para auditoría.</p>
         </div>
 
         <div className="flex items-center gap-4">
@@ -143,7 +143,7 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
 
           <div className="bg-amber-50 border border-amber-100 px-4 py-2 rounded-xl text-center">
             <span className="text-[9px] font-bold text-amber-700 uppercase block">Dispositivo</span>
-            <span className="text-xs font-black text-amber-900 uppercase flex items-center gap-1 mt-0.5">🐻 Oso NeuroRobi</span>
+            <span className="text-xs font-black text-amber-900 uppercase flex items-center gap-1 mt-0.5">🐻 Peluche NeuroRobi</span>
           </div>
 
           <div className="bg-emerald-50 border border-emerald-100 px-4 py-2 rounded-xl text-center">
@@ -212,7 +212,7 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
               {activeTab === 'flex' && 'Historial de Flexión del Brazo Derecho (GPIO 33 - Nivel 1 a 10)'}
               {activeTab === 'gyro' && 'Historial de Intensidad de Movimiento Cinemático (MPU6050)'}
             </h3>
-            <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Telemetría archivada durante la sesión del Oso.</p>
+            <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Telemetría archivada durante la sesión del Peluche.</p>
           </div>
 
           <div className="h-64 w-full overflow-y-auto">
@@ -320,7 +320,7 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
               </div>
 
               <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 text-[11px] text-slate-500 leading-relaxed font-semibold">
-                * Rango de movimiento articular del oso medido en GPIO 33 y coordinación con finales de carrera (SW18/19).
+                * Rango de movimiento articular del peluche medido en GPIO 33 y coordinación con finales de carrera (SW18/19).
               </div>
             </div>
           )}
@@ -370,7 +370,7 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
       {/* 4. Timeline list of spikes */}
       <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
         <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4">
-          Registro de Eventos y Spikes del Oso
+          Registro de Eventos y Spikes del Peluche
         </h3>
         
         <div className="relative border-l border-slate-100 pl-6 space-y-4">

@@ -88,12 +88,7 @@ export const AddClinicalNoteForm: React.FC<AddClinicalNoteFormProps> = ({
           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Métricas de Auditoría Calculadas</h4>
           
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <div className="p-2 bg-white rounded-lg border border-slate-100">
-              <span className="text-[9px] font-bold text-slate-400 uppercase block">FC Promedio</span>
-              <span className="text-sm font-black text-slate-700">{session.metrics.avgHeartRate} lpm</span>
-            </div>
-            
-            <div className="p-2 bg-white rounded-lg border border-slate-100">
+<div className="p-2 bg-white rounded-lg border border-slate-100">
               <span className="text-[9px] font-bold text-slate-400 uppercase block">Grip Máximo</span>
               <span className="text-sm font-black text-slate-700">{session.metrics.maxHugForce}%</span>
             </div>

@@ -23,7 +23,7 @@ export interface Patient {
 export interface SensorReading {
   timestamp: string; // HH:MM:SS
   deviceType: 'oso';
-  // Métricas del Oso NeuroRobi (ESP32)
+  // Métricas del Peluche NeuroRobi (ESP32)
   flexIzq?: number;    // ADC GPIO 32 (Apretón)
   flexDer?: number;    // ADC GPIO 33 (Flexión derecha)
   apreton?: boolean;   // true si flexIzq > 600

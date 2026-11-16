@@ -149,7 +149,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               </div>
               <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-3">
                 <span className="text-[8px] font-bold text-slate-400 uppercase block tracking-wider">Dispositivo Usado</span>
-                <span className="text-xs font-bold text-slate-700 mt-1 block uppercase">Oso NeuroRobi</span>
+                <span className="text-xs font-bold text-slate-700 mt-1 block uppercase">Peluche NeuroRobi</span>
               </div>
             </div>
 

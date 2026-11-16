@@ -59,7 +59,7 @@ export const PsychologistDashboard: React.FC<PsychologistDashboardProps> = ({
       {/* Widget A: Hug Intensity Circular Gauge & Agitation Bar */}
       <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
         <div className="flex items-center justify-between mb-4">
-          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Afecto y Co-regulación (Oso)</h4>
+          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Afecto y Co-regulación (Peluche)</h4>
           <span className="text-rose-500"><Heart size={16} fill={apreton ? 'currentColor' : 'none'} className={apreton ? 'animate-bounce' : ''} /></span>
         </div>
 
@@ -151,7 +151,7 @@ export const PsychologistDashboard: React.FC<PsychologistDashboardProps> = ({
               type="text"
               value={newTrigger}
               onChange={(e) => setNewTrigger(e.target.value)}
-              placeholder="Ej: Llanto al soltar el oso, contacto visual..."
+              placeholder="Ej: Llanto al soltar el peluche, contacto visual..."
               className="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-rose-400 transition-colors"
             />
             <button

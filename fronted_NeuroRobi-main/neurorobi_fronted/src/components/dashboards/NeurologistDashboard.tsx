@@ -6,7 +6,7 @@ interface NeurologistDashboardProps {
   avgHeartRate?: number;
   stereotypicalTicks: number;
   secondsElapsed: number;
-  // Campos del Oso (MPU6050)
+  // Campos del Peluche (MPU6050)
   movimiento?: number;
   mpuOk?: boolean;
   giroX?: number;
@@ -52,7 +52,7 @@ export const NeurologistDashboard: React.FC<NeurologistDashboardProps> = ({
       <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Patrones de Movimiento Estereotipado (Oso)</h4>
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Patrones de Movimiento Estereotipado (Peluche)</h4>
             <span className="text-indigo-500"><Brain size={16} /></span>
           </div>
 

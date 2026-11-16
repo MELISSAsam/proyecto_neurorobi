@@ -7,7 +7,7 @@ interface OccupationalDashboardProps {
   bilateralTouchSync: number;
   fatigueCheckmarks: Record<string, boolean>;
   onToggleFatigueCheckmark: (key: string) => void;
-  // Campos del Oso
+  // Campos del Peluche
   nivelDer?: number;
   flexDer?: number;
   switchIzq?: boolean;
@@ -28,7 +28,7 @@ export const OccupationalDashboard: React.FC<OccupationalDashboardProps> = ({
 
   const fatigueItems = [
     { key: 'forceLoss', label: 'Pérdida súbita de flexión o fuerza de agarre' },
-    { key: 'tremors', label: 'Temblores leves detectados al sostener el oso' },
+    { key: 'tremors', label: 'Temblores leves detectados al sostener el peluche' },
     { key: 'slowCoordination', label: 'Coordinación motora lenta o asincrónica entre brazos' },
     { key: 'digitRigidity', label: 'Rigidez perceptible al presionar los finales de carrera' }
   ];
@@ -43,7 +43,7 @@ export const OccupationalDashboard: React.FC<OccupationalDashboardProps> = ({
       <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Flexión y Coordinación Bilateral (Oso)</h4>
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Flexión y Coordinación Bilateral (Peluche)</h4>
             <span className="text-emerald-500"><Sparkles size={16} /></span>
           </div>
 
@@ -93,7 +93,7 @@ export const OccupationalDashboard: React.FC<OccupationalDashboardProps> = ({
         </div>
 
         <div className="text-[10px] text-slate-400 font-medium mt-4 pt-4 border-t border-slate-50 flex items-center gap-1">
-          <AlertCircle size={10} className="text-emerald-500" /> Sensores flex y switches calibrados para el oso.
+          <AlertCircle size={10} className="text-emerald-500" /> Sensores flex y switches calibrados para el peluche.
         </div>
       </div>
 

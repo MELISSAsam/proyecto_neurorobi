@@ -41,7 +41,7 @@ export const useSensorStream = ({
   const [strongShakeCount, setStrongShakeCount] = useState(0);
   const strongShakeActiveRef = useRef(false);
 
-  // Métricas específicas del Oso NeuroRobi
+  // Métricas específicas del Peluche NeuroRobi
   const [flexIzq, setFlexIzq] = useState(0);
   const [flexDer, setFlexDer] = useState(0);
   const [apreton, setApreton] = useState(false);
@@ -99,7 +99,7 @@ export const useSensorStream = ({
     return Math.round(previousValue + (newValue - previousValue) * alpha);
   }, []);
 
-  // Generates synthetic reading matching Oso NeuroRobi ESP32
+  // Generates synthetic reading matching Peluche NeuroRobi ESP32
   const generateSimulatedPacket = useCallback((): SensorReading => {
     const sFlexIzq = 450 + Math.round(Math.random() * 300);
     const sApreton = sFlexIzq > 600;
@@ -436,7 +436,7 @@ export const useSensorStream = ({
     switch2HoldSeconds,
     shakeIntensity,
     strongShakeCount,
-    // Específicos del Oso
+    // Específicos del Peluche
     flexIzq,
     flexDer,
     apreton,

@@ -184,7 +184,7 @@ export const PatientDirectory: React.FC<PatientDirectoryProps> = ({
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Auditoría de Reportes</h3>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Consulte y audite las gráficas completas de flexión, movimiento, apretón y sincronía bilateral de las últimas sesiones realizadas con el Oso NeuroRobi.
+              Consulte y audite las gráficas completas de flexión, movimiento, apretón y sincronía bilateral de las últimas sesiones realizadas con el Peluche NeuroRobi.
             </p>
           </div>
           <button
