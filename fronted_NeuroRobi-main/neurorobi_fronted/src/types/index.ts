@@ -86,6 +86,7 @@ export interface ClinicalSession {
   deviceId?: string;
   date: string;
   durationSeconds: number;
+  completedAt?: string;
   specialistRole: SpecialistRole;
   notes: string;
   deviceType: 'oso';

@@ -45,6 +45,67 @@ interface PatientStreamPayload {
 }
 
 const getPatientRoom = (patientId: string) => `patient:${patientId}`;
+interface TherapyLease { patientId: string; ownerId: string; controllerId: string; expiresAt: number; }
+let therapyLease: TherapyLease | null = null;
+const LEASE_MS = Math.max(1000, Number(process.env.THERAPY_LEASE_MS) || 12000);
+const currentTherapy = () => {
+  if (therapyLease && Date.now() >= therapyLease.expiresAt) {
+    therapyLease = null; devicePatientMap.oso = null;
+    io.emit('therapy-status', { active: false });
+  }
+  return therapyLease;
+};
+const deviceStatus = () => ({ connected: deviceConnections.oso, therapyActive: Boolean(currentTherapy()) });
+const controllerUser = (req: Request): string => {
+  const token = req.get('authorization')?.match(/^Bearer (.+)$/i)?.[1];
+  const user = jwt.verify(token || '', process.env.JWT_SECRET || 'neurorobi-secret-key-2026');
+  if (typeof user === 'string' || typeof user.id !== 'string') throw new Error('Invalid token');
+  const singleUser = process.env.SINGLE_USER_USERNAME?.trim().toLowerCase();
+  if (singleUser && user.email !== singleUser) throw new Error('Inactive account');
+  return user.id;
+};
+app.get('/api/telemetry/status', (req, res) => {
+  try { controllerUser(req); res.json(deviceStatus()); }
+  catch { res.status(401).json({ error: 'Sesion invalida o expirada' }); }
+});
+app.post('/api/telemetry/control', async (req, res) => {
+  let ownerId: string;
+  try { ownerId = controllerUser(req); }
+  catch { res.status(401).json({ error: 'Sesion invalida o expirada' }); return; }
+  const { action, patientId, controllerId } = req.body || {};
+  if (typeof controllerId !== 'string' || controllerId.length < 8 || controllerId.length > 100 || !['start','keepalive','stop'].includes(action)) {
+    res.status(400).json({ error: 'Control de terapia invalido' }); return;
+  }
+  const active = currentTherapy();
+  if (active && (active.ownerId !== ownerId || active.controllerId !== controllerId)) {
+    res.status(409).json({ error: 'NeuroRobi ya esta en uso en otra terapia' }); return;
+  }
+  if (action === 'stop') {
+    therapyLease = null; devicePatientMap.oso = null;
+    previousSqueeze = false; previousStrongShake = false;
+    io.emit('therapy-status', { active: false });
+    res.json({ therapyActive: false }); return;
+  }
+  if (action === 'keepalive') {
+    if (!active) { res.status(409).json({ error: 'La terapia ya no esta activa' }); return; }
+    active.expiresAt = Date.now() + LEASE_MS;
+    res.json({ therapyActive: true }); return;
+  }
+  if (!deviceConnections.oso) { res.status(409).json({ error: 'Conecta el peluche antes de empezar' }); return; }
+  if (typeof patientId !== 'string') { res.status(400).json({ error: 'Selecciona un paciente' }); return; }
+  try {
+    const patient = await prisma.patient.findUnique({ where: { id: patientId }, select: { id: true } });
+    if (!patient) { res.status(404).json({ error: 'Paciente no encontrado' }); return; }
+    // Volver a comprobar despues de la consulta para evitar dos inicios simultaneos.
+    const existing = currentTherapy();
+    if (existing && (existing.ownerId !== ownerId || existing.controllerId !== controllerId)) { res.status(409).json({error:'NeuroRobi ya esta en uso'}); return; }
+    therapyLease = { patientId, ownerId, controllerId, expiresAt: Date.now() + LEASE_MS };
+    devicePatientMap.oso = patientId;
+    previousSqueeze = false; previousStrongShake = false;
+    io.emit('therapy-status', { active: true });
+    res.json({ therapyActive: true });
+  } catch { res.status(503).json({ error: 'No se pudo iniciar la terapia' }); }
+});
 
 app.get('/api/stats', async (_req: Request, res: Response) => {
   try {
@@ -83,6 +144,17 @@ app.post('/api/telemetry', async (req: Request, res: Response) => {
   const rawType = String(req.body.deviceType || 'oso').toLowerCase();
   if (rawType !== 'oso') { res.status(400).json({ error: 'Solo se admite el oso' }); return; }
   const deviceType: DeviceType = 'oso';
+
+  // En espera solo se confirma conexion; no se normaliza, almacena ni emite una lectura.
+  lastTelemetryTime.oso = Date.now();
+  if (!deviceConnections.oso) {
+    deviceConnections.oso = true;
+    io.emit('device-status', { deviceType: 'oso', connected: true });
+  }
+  const activeTherapy = currentTherapy();
+  if (req.body.heartbeat === true || !activeTherapy) {
+    res.json({ status: 'ok', deviceConnected: true, therapyActive: Boolean(activeTherapy), stored: false }); return;
+  }
 
   // 1. Flex Apretón (GPIO 32): flexIzq (ADC), apreton (bool > 600)
   const flexIzq = typeof req.body.flexIzq !== 'undefined'
@@ -155,14 +227,14 @@ app.post('/api/telemetry', async (req: Request, res: Response) => {
   };
 
   try {
-    await prisma.telemetryPacket.create({ data: { patientId: devicePatientMap.oso, payload: JSON.stringify(dataPayload) } });
+    await prisma.telemetryPacket.create({ data: { patientId: activeTherapy.patientId, payload: JSON.stringify(dataPayload) } });
   } catch (error) {
     console.error('[Telemetry storage]', error);
     res.status(503).json({ error: 'No se pudo almacenar la lectura' });
     return;
   }
 
-  const targetPatientId = devicePatientMap[deviceType] || devicePatientMap['oso'];
+  const targetPatientId = activeTherapy.patientId;
   if (targetPatientId) {
     const targetRoom = getPatientRoom(targetPatientId);
     io.to(targetRoom).emit('sensor-data', dataPayload);
@@ -174,7 +246,7 @@ app.post('/api/telemetry', async (req: Request, res: Response) => {
 
   // Spikes clínicos basados en el Oso
   if (apreton && !previousSqueeze) {
-    io.emit('spike-triggered', {
+    io.to(getPatientRoom(activeTherapy.patientId)).emit('spike-triggered', {
       id: `spk-real-press-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       deviceType,
       timestamp: nowStr,
@@ -186,7 +258,7 @@ app.post('/api/telemetry', async (req: Request, res: Response) => {
   }
 
   if (mpu && movimiento >= 60 && !previousStrongShake) {
-    io.emit('spike-triggered', {
+    io.to(getPatientRoom(activeTherapy.patientId)).emit('spike-triggered', {
       id: `spk-real-rot-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       deviceType,
       timestamp: nowStr,
@@ -200,15 +272,16 @@ app.post('/api/telemetry', async (req: Request, res: Response) => {
 
   previousSqueeze = apreton;
   previousStrongShake = mpu && movimiento >= 60;
-  res.status(200).json({ status: 'ok', deviceConnected: true });
+  res.status(200).json({ status: 'ok', deviceConnected: true, therapyActive: Boolean(currentTherapy()), stored: true });
 });
 
-const HEARTBEAT_TIMEOUT_MS = 2000;
+const HEARTBEAT_TIMEOUT_MS = 6000;
 const HEARTBEAT_CHECK_INTERVAL_MS = 500;
 
 // Periodic heartbeat checker: runs every second
 setInterval(() => {
   const now = Date.now();
+  currentTherapy();
   DEVICE_TYPES.forEach(deviceType => {
     if (deviceConnections[deviceType] && now - lastTelemetryTime[deviceType] > HEARTBEAT_TIMEOUT_MS) {
       deviceConnections[deviceType] = false;
@@ -224,6 +297,8 @@ io.use((socket, next) => {
     const user = jwt.verify(socket.handshake.auth.token, process.env.JWT_SECRET || 'neurorobi-secret-key-2026');
     const singleUser = process.env.SINGLE_USER_USERNAME?.trim().toLowerCase();
     if (singleUser && (typeof user === 'string' || user.email !== singleUser)) throw new Error('Inactive account');
+    if (typeof user === 'string' || !user.id) throw new Error('Invalid user');
+    socket.data.userId = user.id;
     next();
   } catch {
     next(new Error('Sesion invalida o expirada'));
@@ -232,9 +307,13 @@ io.use((socket, next) => {
 
 io.on('connection', (socket) => {
   console.log(`[Socket] Client connected: ${socket.id}`);
+  socket.emit('device-status', { deviceType: 'oso', connected: deviceConnections.oso });
+  socket.emit('therapy-status', { active: Boolean(currentTherapy()) });
 
   socket.on('start-stream', (payload: PatientStreamPayload) => {
-    const { patientId } = payload;
+    const { patientId } = payload || {};
+    const active = currentTherapy();
+    if (!active || active.patientId !== patientId || active.ownerId !== socket.data.userId) return;
     const deviceType: DeviceType = 'oso';
     const patientRoom = getPatientRoom(patientId);
 
@@ -263,7 +342,7 @@ io.on('connection', (socket) => {
       socket.leave(patientRoom);
       const remaining = await io.in(patientRoom).allSockets();
       if (remaining.size === 0) {
-        devicePatientMap[deviceType] = null;
+        if (!currentTherapy()) devicePatientMap[deviceType] = null;
       }
     }
   };

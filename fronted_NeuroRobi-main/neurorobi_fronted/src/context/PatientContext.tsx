@@ -196,6 +196,7 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ...activeSession,
       notes,
       durationSeconds,
+      completedAt: new Date().toISOString(),
       metrics,
       sensorHistory,
       spikesLog,

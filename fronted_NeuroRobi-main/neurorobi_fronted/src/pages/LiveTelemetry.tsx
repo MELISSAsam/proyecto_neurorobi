@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import axios from 'axios';
+import { useDeviceAvailability } from '../hooks/useDeviceAvailability';
+import React, { useState, useEffect, useRef } from 'react';
 import { shakeLevel, shakeScore } from '../utils/movement';
 import { usePatients } from '../context/PatientContext';
 import { useSensorStream } from '../hooks/useSensorStream';
@@ -26,10 +28,28 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
   onEndSessionSuccess,
   onShowSuccessToast
 }) => {
-  const { activePatient, activeSession, endSession, startSession, patients } = usePatients();
+  const { activePatient, activeSession, endSession, startSession, clearActiveSession, patients } = usePatients();
   const { activeRole } = useRole();
 
-  const [isStreaming, setIsStreaming] = useState(true);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const availability = useDeviceAvailability();
+  const controllerId = useRef(crypto.randomUUID());
+  const [selectedPatientId, setSelectedPatientId] = useState('');
+  const [starting, setStarting] = useState(false);
+  const [controlError, setControlError] = useState('');
+  const control = (action: string, patientId?: string) => axios.post(`${import.meta.env.VITE_API_URL}/api/telemetry/control`, { action, patientId, controllerId: controllerId.current }, { timeout: 5000 });
+  useEffect(() => {
+    if (!isStreaming) return;
+    let pending = false;
+    const timer = setInterval(async () => {
+      if (pending) return;
+      pending = true;
+      try { await control('keepalive'); }
+      catch { setIsStreaming(false); setControlError('La terapia se detuvo al perder comunicacion con el servidor. Guarda los registros disponibles.'); }
+      finally { pending = false; }
+    }, 3000);
+    return () => { clearInterval(timer); void control('stop').catch(() => {}); };
+  }, [isStreaming]);
   const [triggers, setTriggers] = useState<string[]>([]);
   const [fatigueCheckmarks, setFatigueCheckmarks] = useState<Record<string, boolean>>({});
 
@@ -46,36 +66,6 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
     simulate: false,
     directEsp32Ip: null
   });
-
-  if (!activePatient) {
-    const handleStartDemo = () => {
-      const demoPatient = patients[0];
-      if (!demoPatient) {
-        onShowSuccessToast(`ℹ️ No hay pacientes registrados. Registra uno primero.`);
-        return;
-      }
-      startSession(demoPatient.id);
-      onShowSuccessToast(`✓ Sesión terapéutica iniciada con ${demoPatient.name}.`);
-    };
-
-    return (
-      <div className="text-center py-16 bg-white border border-slate-100 rounded-2xl p-8 shadow-sm max-w-lg mx-auto my-12 animate-in fade-in zoom-in-95 duration-300">
-        <Activity className="text-teal-600 mx-auto mb-4 animate-pulse" size={48} />
-        <h2 className="text-base font-bold text-slate-700">Sin Paciente Activo</h2>
-        <p className="text-xs text-slate-400 font-semibold mt-1 mb-6">
-          Selecciona o inicia una sesión con un paciente para transmitir la telemetría del Peluche NeuroRobi.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <button
-            onClick={handleStartDemo}
-            className="px-5 py-3 bg-teal-600 hover:bg-teal-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md shadow-teal-600/20 active:scale-98 cursor-pointer flex items-center justify-center gap-2"
-          >
-            <Play size={14} /> Iniciar Sesión Terapéutica
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   const latestReading = oso.streamData[oso.streamData.length - 1] || {
     flexIzq: oso.flexIzq,
@@ -105,9 +95,12 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  const handleEndSession = () => {
-    if (!oso.isDeviceConnected && oso.streamData.length === 0) {
-      onShowSuccessToast(`❌ No se puede finalizar sesión: No se han recibido lecturas del Peluche.`);
+  const handleEndSession = async () => {
+    if (oso.streamData.length === 0) {
+      setIsStreaming(false);
+      try { await control('stop'); } catch { /* El permiso vence automaticamente. */ }
+      await clearActiveSession();
+      onShowSuccessToast('Terapia detenida. No se recibieron mediciones para generar un informe.');
       return;
     }
 
@@ -117,6 +110,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
     }
 
     setIsStreaming(false);
+    try { await control('stop'); } catch { /* El permiso vence automaticamente si se pierde conexion. */ }
 
     const hugValues: number[] = oso.streamData.map(r => r.apreton ? 100 : 0);
     const avgHug = hugValues.length ? Math.round(hugValues.reduce((a, b) => a + b, 0) / hugValues.length) : 0;
@@ -146,6 +140,35 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
     );
     onEndSessionSuccess();
   };
+
+  if (!isStreaming || !activePatient) {
+    const patientId = selectedPatientId || activePatient?.id || '';
+    const hasRecords = oso.streamData.length > 0 && Boolean(activeSession);
+    const pendingReport = Boolean(activeSession?.completedAt || Number(activeSession?.durationSeconds) > 0);
+    return <section className="max-w-2xl mx-auto rounded-3xl border border-slate-100 bg-white p-7 sm:p-12 shadow-sm text-center space-y-5 my-8">
+      <Activity size={48} className={`mx-auto ${availability.connected ? 'text-teal-500' : 'text-slate-300'}`}/>
+      <p className="text-[10px] uppercase tracking-widest font-bold text-teal-600">Modo de espera</p>
+      <h1 className="text-2xl font-black text-slate-800">{availability.connected ? 'NeuroRobi listo para utilizar' : 'Esperando conexion de NeuroRobi'}</h1>
+      <p className="text-sm text-slate-500">{availability.connected ? 'Selecciona un paciente y pulsa Empezar terapia. En espera no se leen ni guardan mediciones terapeuticas.' : 'Enciende el peluche y espera su conexion al servidor.'}</p>
+      <p className="text-xs text-slate-400">{availability.serverConnected ? 'Servidor conectado' : 'Conectando con el servidor...'}</p>
+      {controlError && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">{controlError}</p>}
+      {hasRecords ? <button onClick={handleEndSession} className="rounded-xl bg-teal-600 px-5 py-3 text-sm font-bold text-white">Finalizar y guardar registros disponibles</button> : <>
+        <select aria-label="Paciente para terapia" value={patientId} onChange={e=>setSelectedPatientId(e.target.value)} className="w-full rounded-xl border border-slate-200 p-3 text-sm text-slate-700"><option value="">Selecciona un paciente</option>{patients.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
+        <button disabled={!availability.connected || availability.inUse || !patientId || starting || pendingReport} onClick={async()=>{
+          setStarting(true);setControlError('');
+          try {
+            await control('start', patientId);
+            try { await startSession(patientId); } catch (error) { await control('stop'); throw error; }
+            setIsStreaming(true);onShowSuccessToast('Terapia iniciada. NeuroRobi esta registrando las interacciones.');
+          } catch(error) { setControlError(axios.isAxiosError(error) ? error.response?.data?.error || 'No se pudo empezar la terapia.' : 'No se pudo empezar la terapia.'); }
+          finally { setStarting(false); }
+        }} className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-6 py-3 text-sm font-bold text-white disabled:opacity-40"><Play size={16}/>{starting ? 'Iniciando...' : 'Empezar terapia'}</button>
+        {pendingReport && <p className="text-xs text-amber-700">Hay un informe pendiente. Guardalo en Auditoria y Reporte antes de empezar otra terapia.</p>}
+        {availability.inUse && <p className="text-xs text-amber-700">NeuroRobi esta en uso en otra terapia.</p>}
+      </>}
+      <p className="text-[11px] text-slate-400">Las mediciones comienzan solo al iniciar la terapia y se detienen al finalizar o salir de esta vista.</p>
+    </section>;
+  }
 
   return (
     <div className="space-y-6">

@@ -55,6 +55,7 @@ Adafruit_SSD1306 display(128, 64, &Wire, -1);
 bool oledOK = false;
 bool mpuOK = false;
 volatile bool servidorOK = false;
+volatile bool therapyActive = false;
 uint8_t mpuAddress = 0x68;
 
 int flexIzq = 0;
@@ -159,6 +160,13 @@ void actualizarOLED() {
   }
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
+  if (!therapyActive) {
+    display.setCursor(0, 0); display.print("NEUROROBI LISTO");
+    display.setCursor(0, 20); display.print(servidorOK ? "EN ESPERA" : "CONECTANDO...");
+    display.setCursor(0, 38); display.print("EMPEZAR TERAPIA");
+    display.setCursor(0, 52); display.print("DESDE LA WEB");
+    display.display(); return;
+  }
   display.setCursor(0, 0); display.print("PELUCHE NEUROROBI");
   display.setCursor(0, 16); display.print("APRETON: "); display.print(apreton ? "SI" : "NO");
   display.setCursor(0, 30); display.print("SACUDIDA:");
@@ -326,20 +334,30 @@ void telemetryTask(void*) {
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-device-key", DEVICE_KEY);
   Packet packet;
+  unsigned long lastRequest = 0;
   for (;;) {
     if (WiFi.status() != WL_CONNECTED) {
-      servidorOK = false;
-      // La conexion Wi-Fi la administra el bucle de configuracion.
-      vTaskDelay(pdMS_TO_TICKS(100));
-      continue;
+      servidorOK = false; therapyActive = false;
+      vTaskDelay(pdMS_TO_TICKS(100)); continue;
     }
-    if (xQueueReceive(telemetryQueue, &packet, pdMS_TO_TICKS(100)) == pdTRUE) {
-      int code = http.POST(String(packet.json));
-      servidorOK = code == 200;
-      if (!servidorOK) {
-        Serial.printf("Servidor HTTP: %d (401: revisar DEVICE_KEY)\n", code);
-        vTaskDelay(pdMS_TO_TICKS(500));
-      }
+    String payload;
+    if (!therapyActive) {
+      if (millis() - lastRequest < 1000) { vTaskDelay(pdMS_TO_TICKS(20)); continue; }
+      payload = "{\"deviceType\":\"oso\",\"heartbeat\":true}";
+    } else {
+      if (xQueueReceive(telemetryQueue, &packet, pdMS_TO_TICKS(100)) != pdTRUE) continue;
+      payload = packet.json;
+    }
+    int code = http.POST(payload);
+    String response = code > 0 ? http.getString() : "";
+    lastRequest = millis();
+    servidorOK = code == 200;
+    bool wasActive = therapyActive;
+    therapyActive = servidorOK && response.indexOf("\"therapyActive\":true") >= 0;
+    if (wasActive && !therapyActive) xQueueReset(telemetryQueue);
+    if (!servidorOK) {
+      Serial.printf("Servidor HTTP: %d (401: revisar DEVICE_KEY)\n", code);
+      vTaskDelay(pdMS_TO_TICKS(500));
     }
   }
 }
@@ -356,7 +374,6 @@ void setup() {
   Wire.setTimeOut(50);
   iniciarOLED();
   iniciarMPU();
-  leerSensores();
   actualizarOLED();
 
   setupWifiConfig();
@@ -374,7 +391,9 @@ void loop() {
   // Lectura de sensores cada 100ms
   if (millis() - tSensores >= 100) { 
     tSensores = millis(); 
-    leerSensores(); 
+    switchIzq = digitalRead(SWITCH_IZQ) == LOW;
+    switchDer = digitalRead(SWITCH_DER) == LOW;
+    if (therapyActive) leerSensores();
   }
   
   // Actualización de pantalla OLED cada 250ms
@@ -384,7 +403,7 @@ void loop() {
   }
 
   // Envío al servidor remoto desplegado cada 100ms
-  if (millis() - tServer >= 100) {
+  if (therapyActive && millis() - tServer >= 100) {
     tServer = millis();
     Packet packet;
     construirJSON().toCharArray(packet.json, sizeof(packet.json));
@@ -395,6 +414,6 @@ void loop() {
   if (millis() - tSerial >= 1000) {
     tSerial = millis();
     Serial.printf("APRETON=%s | SW18=%d SW19=%d | SACUDIDA=%s | SRV=%s\n",
-      apreton ? "SI" : "NO", switchIzq, switchDer, nivelSacudida(), servidorOK ? "OK(200)" : "ERROR");
+      apreton ? "SI" : "NO", switchIzq, switchDer, therapyActive ? nivelSacudida() : "EN ESPERA", servidorOK ? "OK(200)" : "ERROR");
   }
 }

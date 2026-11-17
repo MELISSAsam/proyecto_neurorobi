@@ -27,7 +27,7 @@ export const PatientDirectory: React.FC<PatientDirectoryProps> = ({
   onShowSuccessToast,
   onNavigate
 }) => {
-  const { patients, startSession, sessions } = usePatients();
+  const { patients, selectPatient, sessions } = usePatients();
 
   // Selected patient for quick session start
   const [quickPatientId, setQuickPatientId] = useState('');
@@ -37,8 +37,8 @@ export const PatientDirectory: React.FC<PatientDirectoryProps> = ({
     if (!quickPatientId) return;
     const patient = patients.find(p => p.id === quickPatientId);
     if (!patient) return;
-    startSession(quickPatientId);
-    onShowSuccessToast(`✓ Sesión terapéutica iniciada para ${patient.name}`);
+    selectPatient(patient);
+    onShowSuccessToast('Paciente seleccionado. Pulsa Empezar terapia cuando NeuroRobi este listo.');
     onStartSessionSuccess();
   };
 
@@ -148,7 +148,7 @@ export const PatientDirectory: React.FC<PatientDirectoryProps> = ({
             }`}
           >
             <Activity size={13} className={quickPatientId ? "animate-pulse" : ""} />
-            Iniciar Consulta
+            Preparar terapia
           </button>
         </div>
 

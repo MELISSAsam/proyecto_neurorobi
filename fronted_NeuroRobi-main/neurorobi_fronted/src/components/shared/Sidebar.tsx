@@ -28,8 +28,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, setScreen, isOp
   const { logout, userName, user } = useAuth();
   const [isEditProfileOpen, setIsEditProfileOpen] = React.useState(false);
 
-  const isSessionRunning = activeSession !== null && activePatient !== null && activeSession.durationSeconds === 0;
-  const hasFinishedSessionPendingReport = activeSession !== null && activeSession.durationSeconds > 0;
+  const isSessionRunning = activeSession !== null && activePatient !== null && activeSession.durationSeconds === 0 && !activeSession.completedAt;
+  const hasFinishedSessionPendingReport = activeSession !== null && (activeSession.durationSeconds > 0 || Boolean(activeSession.completedAt));
 
   const getRoleDisplayName = (role: string) => {
     if (role === 'PSICOLOGIA_CLINICA') return 'Psicología Clínica';

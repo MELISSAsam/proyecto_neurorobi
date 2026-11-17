@@ -19,3 +19,12 @@ Pines originales: sensor unico de apreton GPIO32, switches18/19, I2C SDA16/SCL4.
 HTTPS usa setInsecure y no verifica el certificado. Las pruebas fisicas de cambio de router, contrasena incorrecta, reinicio y recuperacion siguen pendientes.
 
 El flex derecho GPIO33 ya no se utiliza. Apreton: solo GPIO32, umbral ADC > 600. La OLED muestra En reposo, Suave, Moderada o Fuerte. La web usa un indice relativo de sacudida 0 a 10; no muestra los ejes ni unidades tecnicas del giroscopio. No es una medicion de fuerza ni un diagnostico.
+
+
+## Espera e inicio de terapia
+
+Al conectarse al servidor, el peluche queda EN ESPERA. Envia una confirmacion ligera de conexion cada segundo, sin lecturas del flex/MPU ni registros en la base. Solo se consultan los interruptores necesarios para abrir la configuracion Wi-Fi.
+
+En la web abre Telemetria en Vivo, selecciona el paciente y pulsa Empezar terapia. El servidor autoriza el muestreo y el ESP32 empieza a preparar y enviar lecturas cada 100 ms. Finalizar la terapia o salir de la vista detiene la autorizacion. Si el navegador pierde comunicacion, el permiso vence en unos 12 segundos. El ESP32 deja de medir al recibir la parada o si pierde conexion al servidor.
+
+Es necesario cargar este firmware para ahorrar las lecturas y envios del dispositivo. Los firmwares anteriores siguen enviando continuamente, aunque el backend nuevo descarta los paquetes mientras no hay terapia activa. El modo de configuracion Wi-Fi sigue disponible con ambos interruptores durante 5 segundos.

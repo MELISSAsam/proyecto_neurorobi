@@ -11,7 +11,7 @@ const env = { ...process.env, NODE_ENV: 'production', SEED_DEMO_DATA: 'false',
   UPLOADS_DIR: path.join(data, 'uploads'), JWT_SECRET: 'isolated-test-secret-with-at-least-32-characters',
   INITIAL_ADMIN_EMAIL: 'deploy@example.test', INITIAL_ADMIN_PASSWORD: 'isolated-password-123',
   SINGLE_USER_USERNAME: 'melissa', SINGLE_USER_PASSWORD: 'isolated-test-password',
-  TELEMETRY_API_KEY: 'isolated-device-key', PORT: '43101', REGISTRY_PORT: '43100',
+  TELEMETRY_API_KEY: 'isolated-device-key', THERAPY_LEASE_MS: '1000', PORT: '43101', REGISTRY_PORT: '43100',
   AUTH_PORT: '43102', PATIENT_PORT: '43103', SESSION_PORT: '43104', TELEMETRY_PORT: '43105',
   REGISTRY_URL: 'http://127.0.0.1:43100', SERVICE_HOSTNAME: '127.0.0.1',
   AUTH_SERVICE_URL: 'http://127.0.0.1:43102', PATIENT_SERVICE_URL: 'http://127.0.0.1:43103',
@@ -77,6 +77,20 @@ async function main() {
   assert.equal(session.sensorHistory[0].switchIzq, true);
   await request('/api/stats', { headers });
   await request('/api/stats', { headers: { ...headers, Origin: 'https://proyecto-neurorobi-l9b7ucvwf-melissa-chuquis-projects.vercel.app' } }, 403);
+  const deviceHeaders = { 'Content-Type': 'application/json', 'x-device-key': env.TELEMETRY_API_KEY };
+  const standby = await request('/api/telemetry', { method: 'POST', headers: deviceHeaders, body: JSON.stringify({ deviceType: 'oso', heartbeat: true }) });
+  assert.equal(standby.therapyActive, false); assert.equal(standby.stored, false);
+  const idleDb = new (require('better-sqlite3'))(path.join(data, 'test.db'));
+  const countBefore = idleDb.prepare('SELECT COUNT(*) AS total FROM TelemetryPacket').get().total;
+  const ignored = await request('/api/telemetry', { method: 'POST', headers: deviceHeaders, body: JSON.stringify({ flexIzq: 900, apreton: true }) });
+  assert.equal(ignored.stored, false);
+  assert.equal(idleDb.prepare('SELECT COUNT(*) AS total FROM TelemetryPacket').get().total, countBefore);
+  idleDb.close();
+  const controllerId = 'smoke-controller-123';
+  const started = await request('/api/telemetry/control', { method: 'POST', headers, body: JSON.stringify({ action: 'start', patientId: patient.id, controllerId }) });
+  assert.equal(started.therapyActive, true);
+  await request('/api/telemetry/control', { method: 'POST', headers, body: JSON.stringify({ action: 'start', patientId: patient.id, controllerId: 'another-controller' }) }, 409);
+  await request('/api/telemetry/control', { method: 'POST', headers, body: JSON.stringify({ action: 'stop', controllerId: 'another-controller' }) }, 409);
   await request('/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-device-key': env.TELEMETRY_API_KEY }, body: JSON.stringify({ deviceType: 'oso', flexIzq: 750, apreton: true, switchIzq: true, switchDer: false, mpu: true, giroX: 3, giroY: 0, giroZ: 0, movimiento: 1 }) });
   const db = new (require('better-sqlite3'))(path.join(data, 'test.db'));
   const stored = db.prepare('SELECT payload FROM TelemetryPacket ORDER BY id DESC LIMIT 1').get();
@@ -87,6 +101,16 @@ async function main() {
   assert.equal(JSON.parse(stored.payload).flexDer, undefined);
   assert.equal(JSON.parse(stored.payload).nivelDer, undefined);
   db.close();
+  await request('/api/telemetry/control', { method: 'POST', headers, body: JSON.stringify({ action: 'stop', controllerId }) });
+  const stopped = await request('/api/telemetry', { method: 'POST', headers: deviceHeaders, body: JSON.stringify({ heartbeat: true }) });
+  assert.equal(stopped.therapyActive, false);
+  await request('/api/telemetry/control', { method: 'POST', headers, body: JSON.stringify({ action: 'start', patientId: patient.id, controllerId }) });
+  await new Promise(resolve => setTimeout(resolve, 1200));
+  const expired = await request('/api/telemetry', { method: 'POST', headers: deviceHeaders, body: JSON.stringify({ heartbeat: true }) });
+  assert.equal(expired.therapyActive, false);
+  const finalDb = new (require('better-sqlite3'))(path.join(data, 'test.db'));
+  assert.equal(finalDb.prepare('SELECT COUNT(*) AS total FROM TelemetryPacket').get().total, countBefore + 1);
+  finalDb.close();
   const { io } = require(path.resolve(root, '../../fronted_NeuroRobi-main/neurorobi_fronted/node_modules/socket.io-client'));
   for (const transport of ['websocket', 'polling']) {
     await new Promise((resolve, reject) => {

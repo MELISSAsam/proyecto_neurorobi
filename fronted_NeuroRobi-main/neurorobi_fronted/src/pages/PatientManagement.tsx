@@ -35,7 +35,7 @@ export const PatientManagement: React.FC<PatientManagementProps> = ({
     patients, 
     sessions, 
     deletePatient, 
-    startSession 
+    selectPatient
   } = usePatients();
 
   // Search & Navigation States
@@ -72,8 +72,8 @@ export const PatientManagement: React.FC<PatientManagementProps> = ({
   };
 
   const handleStartSession = (patientId: string, name: string) => {
-    startSession(patientId);
-    onShowSuccessToast(`✓ Sesión terapéutica iniciada para ${name}`);
+    selectPatient(patients.find(patient => patient.id === patientId) || null);
+    onShowSuccessToast(`Paciente seleccionado: ${name}. Pulsa Empezar terapia cuando este listo.`);
     onStartSessionSuccess();
   };
 
@@ -242,7 +242,7 @@ export const PatientManagement: React.FC<PatientManagementProps> = ({
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-[11px] uppercase tracking-wide shadow-xs active:scale-98 transition-all cursor-pointer"
                   >
                     <Play size={10} />
-                    Iniciar Sesión
+                    Preparar terapia
                   </button>
                 </div>
               </div>
