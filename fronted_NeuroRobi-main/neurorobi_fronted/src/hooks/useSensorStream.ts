@@ -129,7 +129,7 @@ export const useSensorStream = ({
       giroY: sGiroY,
       giroZ: sGiroZ,
       movimiento: sMovimiento,
-      hugForce: sNivelDer * 10,
+      hugForce: sApreton ? 100 : 0,
       rotationX: sGiroX,
       rotationY: sGiroY,
       rotationZ: sGiroZ,
@@ -253,7 +253,7 @@ export const useSensorStream = ({
             switchDer: sSwDer,
             mpu: sMpu,
             movimiento: sMovimiento,
-            hugForce: sNivelDer * 10,
+            hugForce: sApreton ? 100 : 0,
             rotationX: lastReading ? smoothValue(data.giroX ?? data.rotationX ?? 0, lastReading.rotationX, 0.22) : (data.giroX ?? 0),
             rotationY: lastReading ? smoothValue(data.giroY ?? data.rotationY ?? 0, lastReading.rotationY, 0.22) : (data.giroY ?? 0),
             rotationZ: lastReading ? smoothValue(data.giroZ ?? data.rotationZ ?? 0, lastReading.rotationZ, 0.22) : (data.giroZ ?? 0),
@@ -271,7 +271,7 @@ export const useSensorStream = ({
         setSwitch2Pressed(sSwDer);
         setShakeIntensity(sMovimiento);
 
-        const isStrongShake = sMovimiento >= 40;
+        const isStrongShake = sMpu && sMovimiento >= 60;
         if (isStrongShake && !strongShakeActiveRef.current) {
           strongShakeActiveRef.current = true;
           setStrongShakeCount(prev => prev + 1);
@@ -280,8 +280,8 @@ export const useSensorStream = ({
         }
 
         setIsFsrConnected(true);
-        setMaxGripForce(prev => Math.max(prev, sNivelDer * 10));
-        setAvgHugForce(prev => Math.round((prev * 0.9) + ((sNivelDer * 10) * 0.1)));
+        setMaxGripForce(prev => Math.max(prev, sApreton ? 100 : 0));
+        setAvgHugForce(prev => Math.round((prev * 0.9) + ((sApreton ? 100 : 0) * 0.1)));
         setIsGyroConnected(sMpu);
 
         // Coordinación táctil bilateral: si ambos switches están o estuvieron activos

@@ -14,6 +14,8 @@ No es necesario escribir WIFI_STA_SSID ni WIFI_STA_PASS: puedes dejarlos como ej
 
 La configuracion local funciona sin Internet y las credenciales quedan en el ESP32, no se envian a Railway. Para transmitir datos a Railway si hace falta una red con Internet. El portal local es exclusivamente para Wi-Fi y no muestra un dashboard de sensores. El cambio de red interrumpe temporalmente la transmision.
 
-Pines originales: flex32/33, switches18/19, I2C SDA16/SCL4. El firmware prepara lecturas cada 100 ms en una cola de longitud 1 y transmite la mas reciente en una tarea independiente. SRV=OK(200) significa que Railway acepto la lectura. HTTP401 indica DEVICE_KEY incorrecta.
+Pines originales: sensor unico de apreton GPIO32, switches18/19, I2C SDA16/SCL4. El firmware prepara lecturas cada 100 ms en una cola de longitud 1 y transmite la mas reciente en una tarea independiente. SRV=OK(200) significa que Railway acepto la lectura. HTTP401 indica DEVICE_KEY incorrecta.
 
 HTTPS usa setInsecure y no verifica el certificado. Las pruebas fisicas de cambio de router, contrasena incorrecta, reinicio y recuperacion siguen pendientes.
+
+El flex derecho GPIO33 ya no se utiliza. Apreton: solo GPIO32, umbral ADC > 600. La OLED muestra En reposo, Suave, Moderada o Fuerte. La web usa un indice relativo de sacudida 0 a 10; no muestra los ejes ni unidades tecnicas del giroscopio. No es una medicion de fuerza ni un diagnostico.

@@ -31,6 +31,8 @@ app.use(express.json());
 // Using Feign Clients to communicate with Patient and Session Services
 // ────────────────────────────────────
 
+let previousSqueeze = false;
+let previousStrongShake = false;
 type DeviceType = 'oso';
 const DEVICE_TYPES: DeviceType[] = ['oso'];
 const lastTelemetryTime: Record<DeviceType, number> = { oso: 0 };
@@ -90,12 +92,6 @@ app.post('/api/telemetry', async (req: Request, res: Response) => {
     ? Boolean(req.body.apreton)
     : flexIzq > 600;
 
-  // 2. Flex Derecho (GPIO 33): flexDer (ADC 700-1300), nivelDer (1 a 10)
-  const flexDer = typeof req.body.flexDer !== 'undefined' ? Number(req.body.flexDer) : 0;
-  const nivelDer = typeof req.body.nivelDer !== 'undefined'
-    ? Number(req.body.nivelDer)
-    : Math.min(10, Math.max(1, Math.round(1.0 + ((flexDer - 700) * 9.0) / 600.0)));
-
   // 3. Finales de Carrera: switchIzq (GPIO 18), switchDer (GPIO 19)
   const switchIzq = typeof req.body.switchIzq !== 'undefined' ? Boolean(req.body.switchIzq) : Boolean(req.body.switch1);
   const switchDer = typeof req.body.switchDer !== 'undefined' ? Boolean(req.body.switchDer) : Boolean(req.body.switch2);
@@ -116,7 +112,7 @@ app.post('/api/telemetry', async (req: Request, res: Response) => {
         : Math.min(100, Math.max(0, Number((Math.sqrt(giroX * giroX + giroY * giroY + giroZ * giroZ) / 3.0).toFixed(1)))));
 
   // Mapeo retrocompatible
-  const hForce = Math.min(100, Math.max(0, nivelDer * 10));
+  const hForce = apreton ? 100 : 0;
   const hRate = -1; // Este hardware no mide frecuencia cardiaca.
 
   // Mark device as connected and update timestamp
@@ -135,9 +131,7 @@ app.post('/api/telemetry', async (req: Request, res: Response) => {
     deviceType,
     // Métricas del Oso NeuroRobi
     flexIzq,
-    flexDer,
     apreton,
-    nivelDer,
     switchIzq,
     switchDer,
     mpu,
@@ -178,7 +172,7 @@ app.post('/api/telemetry', async (req: Request, res: Response) => {
   }
 
   // Spikes clínicos basados en el Oso
-  if (apreton || flexIzq > 1500) {
+  if (apreton && !previousSqueeze) {
     io.emit('spike-triggered', {
       id: `spk-real-press-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       deviceType,
@@ -190,31 +184,21 @@ app.post('/api/telemetry', async (req: Request, res: Response) => {
     });
   }
 
-  if (nivelDer >= 9) {
-    io.emit('spike-triggered', {
-      id: `spk-real-flex-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      deviceType,
-      timestamp: nowStr,
-      type: 'Flexión Articular',
-      value: nivelDer,
-      alertText: `Flexión Máxima del Brazo Derecho: Nivel ${nivelDer}/10 registrado (ADC ${flexDer}).`,
-      severity: 'warning'
-    });
-  }
-
-  if (movimiento > 45) {
+  if (mpu && movimiento >= 60 && !previousStrongShake) {
     io.emit('spike-triggered', {
       id: `spk-real-rot-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       deviceType,
       timestamp: nowStr,
       type: 'Cinemática',
       value: Math.round(movimiento),
-      alertText: `Crisis de Agitación Motora: Intensidad de movimiento ${movimiento.toFixed(1)}/100 en MPU6050.`,
+      alertText: `Sacudida fuerte del peluche (intensidad aproximada ${Math.round(movimiento / 10)}/10).`,
       severity: 'warning'
     });
   }
 
 
+  previousSqueeze = apreton;
+  previousStrongShake = mpu && movimiento >= 60;
   res.status(200).json({ status: 'ok', deviceConnected: true });
 });
 

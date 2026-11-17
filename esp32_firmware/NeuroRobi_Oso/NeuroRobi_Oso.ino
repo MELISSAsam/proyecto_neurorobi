@@ -16,8 +16,8 @@
 // =========================================================================
 
 // 1. Configuración de tu red Wi-Fi (para que el ESP32 tenga acceso al servidor):
-const char* WIFI_STA_SSID = "TU_WIFI_AQUI";      // Nombre de tu red Wi-Fi
-const char* WIFI_STA_PASS = "TU_PASSWORD_WIFI";  // Contraseña de tu red Wi-Fi
+const char* WIFI_STA_SSID = "SAGBAY";      // Nombre de tu red Wi-Fi
+const char* WIFI_STA_PASS = "Sofia1980Kaleb";  // Contraseña de tu red Wi-Fi
 
 // 2. URL del Servidor Desplegado (o local):
 // Si está en Railway/Render pon la URL HTTPS completa, por ejemplo:
@@ -27,18 +27,15 @@ const char* WIFI_STA_PASS = "TU_PASSWORD_WIFI";  // Contraseña de tu red Wi-Fi
 const char* SERVER_URL = "https://neurorobi-backend-production.up.railway.app/api/telemetry";
 
 // 3. Clave del dispositivo (debe coincidir con TELEMETRY_API_KEY en tu .env):
-const char* DEVICE_KEY = "TU_TELEMETRY_API_KEY";
+const char* DEVICE_KEY = "sTkRF5mz6DaPA9Ic9oxr0qMw8YGFCEdn";
 
 // Pines de Hardware (100% tus pines originales sin cambios)
 const int FLEX_APRETON   = 32;
-const int FLEX_DERECHO   = 33;
 const int SWITCH_IZQ     = 18;
 const int SWITCH_DER     = 19;
 const int SDA_PIN        = 16;
 const int SCL_PIN        = 4;
 const int UMBRAL_APRETON = 600; // ON solo cuando ADC > 600
-const int DER_MIN        = 700;
-const int DER_MAX        = 1300;
 
 // Configuracion local independiente de Internet.
 WebServer configServer(80);
@@ -60,16 +57,12 @@ bool mpuOK = false;
 volatile bool servidorOK = false;
 uint8_t mpuAddress = 0x68;
 
-int flexIzq = 0, flexDer = 0, nivelDer = 1;
+int flexIzq = 0;
 bool apreton = false, switchIzq = false, switchDer = false;
 float accX = 0, accY = 0, accZ = 0;
 float giroX = 0, giroY = 0, giroZ = 0, movimiento = 0;
 unsigned long tSensores = 0, tOLED = 0, tSerial = 0, tMPU = 0, tServer = 0;
 
-int nivelFlex(int adc) {
-  float n = 1.0f + ((float)(adc - DER_MIN) * 9.0f) / (DER_MAX - DER_MIN);
-  return constrain((int)roundf(n), 1, 10);
-}
 
 bool i2cPresente(uint8_t dir) {
   Wire.beginTransmission(dir);
@@ -133,21 +126,25 @@ void leerMPU() {
 }
 
 void leerSensores() {
-  long sumaI = 0, sumaD = 0;
+  long sumaI = 0;
   for (int i = 0; i < 16; ++i) {
     sumaI += analogRead(FLEX_APRETON);
-    sumaD += analogRead(FLEX_DERECHO);
   }
   flexIzq = sumaI / 16;
-  flexDer = sumaD / 16;
   apreton = flexIzq > UMBRAL_APRETON;
-  nivelDer = nivelFlex(flexDer);
   switchIzq = digitalRead(SWITCH_IZQ) == LOW;
   switchDer = digitalRead(SWITCH_DER) == LOW;
   leerMPU();
 }
 
 // Dashboard OLED original: alterna dos pantallas cada 3 segundos
+const char* nivelSacudida() {
+  if (movimiento < 10) return "EN REPOSO";
+  if (movimiento < 30) return "SUAVE";
+  if (movimiento < 60) return "MODERADA";
+  return "FUERTE";
+}
+
 void actualizarOLED() {
   if (!oledOK) return;
   display.clearDisplay();
@@ -162,36 +159,11 @@ void actualizarOLED() {
   }
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
-  if ((millis() / 3000) % 2 == 0) {
-    display.setCursor(34, 0); display.print("NEUROROBI");
-    display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
-    display.drawRoundRect(0, 13, 61, 32, 3, SSD1306_WHITE);
-    display.drawRoundRect(66, 13, 62, 32, 3, SSD1306_WHITE);
-    display.setCursor(9, 17); display.print("APRETON");
-    display.setTextSize(2);
-    display.setCursor(apreton ? 17 : 12, 28); display.print(apreton ? "ON" : "OFF");
-    display.setTextSize(1);
-    display.setCursor(72, 17); display.print("FLEX DER");
-    display.setTextSize(2);
-    display.setCursor(74, 28); display.print(nivelDer);
-    display.setTextSize(1); display.print("/10");
-    display.setCursor(0, 48); display.print("SW I:"); display.print(switchIzq ? "ON" : "OFF");
-    display.print(" D:"); display.print(switchDer ? "ON" : "OFF");
-    display.setCursor(0, 57); display.print("SRV: ");
-    display.print(servidorOK ? "OK" : (WiFi.status() == WL_CONNECTED ? "ERR" : "NO-WIFI"));
-    display.print(" | MOV:");
-    display.print((int)movimiento);
-  } else {
-    display.setCursor(29, 0); display.print("MOVIMIENTO");
-    display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
-    display.setCursor(0, 16); display.print("MPU6050: "); display.print(mpuOK ? "OK" : "ERROR");
-    display.setCursor(0, 29); display.print("INTENSIDAD");
-    display.drawRect(0, 41, 128, 13, SSD1306_WHITE);
-    int ancho = constrain((int)(movimiento * 1.24f), 0, 124);
-    display.fillRect(2, 43, ancho, 9, SSD1306_WHITE);
-    display.setCursor(0, 57); display.print("GIRO: ");
-    display.print((int)movimiento); display.print("/100");
-  }
+  display.setCursor(0, 0); display.print("PELUCHE NEUROROBI");
+  display.setCursor(0, 16); display.print("APRETON: "); display.print(apreton ? "SI" : "NO");
+  display.setCursor(0, 30); display.print("SACUDIDA:");
+  display.setCursor(0, 42); display.print(mpuOK ? nivelSacudida() : "SIN SENSOR");
+  display.setCursor(0, 55); display.print(servidorOK ? "SERVIDOR OK" : "CONECTANDO...");
   display.display();
 }
 
@@ -201,18 +173,10 @@ String construirJSON() {
   j = "{";
   j += "\"deviceType\":\"oso\",";
   j += "\"flexIzq\":" + String(flexIzq) + ",";
-  j += "\"flexDer\":" + String(flexDer) + ",";
   j += "\"apreton\":" + String(apreton ? "true" : "false") + ",";
-  j += "\"nivelDer\":" + String(nivelDer) + ",";
   j += "\"switchIzq\":" + String(switchIzq ? "true" : "false") + ",";
   j += "\"switchDer\":" + String(switchDer ? "true" : "false") + ",";
   j += "\"mpu\":" + String(mpuOK ? "true" : "false") + ",";
-  j += "\"accX\":" + String(accX, 2) + ",";
-  j += "\"accY\":" + String(accY, 2) + ",";
-  j += "\"accZ\":" + String(accZ, 2) + ",";
-  j += "\"giroX\":" + String(giroX, 2) + ",";
-  j += "\"giroY\":" + String(giroY, 2) + ",";
-  j += "\"giroZ\":" + String(giroZ, 2) + ",";
   j += "\"movimiento\":" + String(movimiento, 1);
   j += "}";
   return j;
@@ -387,7 +351,6 @@ void setup() {
   pinMode(SWITCH_DER, INPUT_PULLUP);
   analogReadResolution(12);
   analogSetPinAttenuation(FLEX_APRETON, ADC_11db);
-  analogSetPinAttenuation(FLEX_DERECHO, ADC_11db);
   Wire.begin(SDA_PIN, SCL_PIN);
   Wire.setClock(100000);
   Wire.setTimeOut(50);
@@ -431,8 +394,7 @@ void loop() {
   // Log serial cada segundo
   if (millis() - tSerial >= 1000) {
     tSerial = millis();
-    Serial.printf("APRETON=%s (ADC %d) | FLEX DER=%d/10 | SW18=%d SW19=%d | MOV=%.1f | SRV=%s\n",
-      apreton ? "ON" : "OFF", flexIzq, nivelDer,
-      switchIzq, switchDer, movimiento, servidorOK ? "OK(200)" : "ERROR");
+    Serial.printf("APRETON=%s | SW18=%d SW19=%d | SACUDIDA=%s | SRV=%s\n",
+      apreton ? "SI" : "NO", switchIzq, switchDer, nivelSacudida(), servidorOK ? "OK(200)" : "ERROR");
   }
 }

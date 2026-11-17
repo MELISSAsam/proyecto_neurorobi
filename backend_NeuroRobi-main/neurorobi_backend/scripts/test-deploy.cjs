@@ -66,18 +66,21 @@ async function main() {
   const patient = await request('/api/patients', { method: 'POST', headers, body: JSON.stringify({ name: 'Smoke Patient', age: 8, diagnosis: 'TEA', initialObservation: 'Test' }) }, 201);
   assert.ok(patient.id);
   const session = await request('/api/sessions', { method: 'POST', headers, body: JSON.stringify({
-    patientId: patient.id, specialistId: login.user.id, durationSeconds: 60, metrics: {}, notes: 'Smoke session', sensorHistory: [{ timestamp: '12:00:00', flexIzq: 750, flexDer: 1000, apreton: true, nivelDer: 6, switchIzq: true, switchDer: false, mpu: true, accX: 0.1, accY: 0.2, accZ: 1, giroX: 3, giroY: 0, giroZ: 0, movimiento: 1 }]
+    patientId: patient.id, specialistId: login.user.id, durationSeconds: 60, metrics: {}, notes: 'Smoke session', sensorHistory: [{ timestamp: '12:00:00', flexIzq: 750, apreton: true, switchIzq: true, switchDer: false, mpu: true, accX: 0.1, accY: 0.2, accZ: 1, giroX: 3, giroY: 0, giroZ: 0, movimiento: 1 }]
   }) }, 201);
   assert.equal((await request(`/api/sessions/${session.id}`, { headers })).notes, 'Smoke session');
   assert.equal(session.sensorHistory[0].flexIzq, 750);
   assert.equal(session.sensorHistory[0].switchIzq, true);
   await request('/api/stats', { headers });
   await request('/api/stats', { headers: { ...headers, Origin: 'https://proyecto-neurorobi-l9b7ucvwf-melissa-chuquis-projects.vercel.app' } }, 403);
-  await request('/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-device-key': env.TELEMETRY_API_KEY }, body: JSON.stringify({ deviceType: 'oso', flexIzq: 750, apreton: true, flexDer: 1000, nivelDer: 6, switchIzq: true, switchDer: false, mpu: true, giroX: 3, giroY: 0, giroZ: 0, movimiento: 1 }) });
+  await request('/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-device-key': env.TELEMETRY_API_KEY }, body: JSON.stringify({ deviceType: 'oso', flexIzq: 750, apreton: true, switchIzq: true, switchDer: false, mpu: true, giroX: 3, giroY: 0, giroZ: 0, movimiento: 1 }) });
   const db = new (require('better-sqlite3'))(path.join(data, 'test.db'));
   const stored = db.prepare('SELECT payload FROM TelemetryPacket ORDER BY id DESC LIMIT 1').get();
   assert.equal(JSON.parse(stored.payload).flexIzq, 750);
   assert.equal(JSON.parse(stored.payload).mpu, true);
+  assert.equal(JSON.parse(stored.payload).hugForce, 100);
+  assert.equal(JSON.parse(stored.payload).flexDer, undefined);
+  assert.equal(JSON.parse(stored.payload).nivelDer, undefined);
   db.close();
   const { io } = require(path.resolve(root, '../../fronted_NeuroRobi-main/neurorobi_fronted/node_modules/socket.io-client'));
   for (const transport of ['websocket', 'polling']) {

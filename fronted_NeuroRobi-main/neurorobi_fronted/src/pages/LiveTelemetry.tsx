@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { shakeLevel, shakeScore } from '../utils/movement';
 import { usePatients } from '../context/PatientContext';
 import { useSensorStream } from '../hooks/useSensorStream';
 import { useRole } from '../context/RoleContext';
@@ -6,20 +7,20 @@ import { PsychologistDashboard } from '../components/dashboards/PsychologistDash
 import { OccupationalDashboard } from '../components/dashboards/OccupationalDashboard';
 import { NeurologistDashboard } from '../components/dashboards/NeurologistDashboard';
 
-import { 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   Legend,
   ReferenceLine
 } from 'recharts';
-import { 
-  Wifi, 
-  Activity, 
+import {
+  Wifi,
+  Activity,
   Timer,
   Square,
   Sparkles,
@@ -88,9 +89,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
 
   const latestReading = oso.streamData[oso.streamData.length - 1] || {
     flexIzq: oso.flexIzq,
-    flexDer: oso.flexDer,
     apreton: oso.apreton,
-    nivelDer: oso.nivelDer,
     switchIzq: oso.switch1Pressed,
     switchDer: oso.switch2Pressed,
     mpu: oso.mpuOk,
@@ -104,9 +103,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
   };
 
   const currentFlexIzq = latestReading.flexIzq ?? oso.flexIzq ?? 0;
-  const currentFlexDer = latestReading.flexDer ?? oso.flexDer ?? 0;
   const currentApreton = Boolean(latestReading.apreton ?? oso.apreton);
-  const currentNivelDer = latestReading.nivelDer ?? oso.nivelDer ?? 1;
   const currentSwIzq = Boolean(latestReading.switchIzq ?? oso.switch1Pressed);
   const currentSwDer = Boolean(latestReading.switchDer ?? oso.switch2Pressed);
   const currentMpu = Boolean(latestReading.mpu ?? oso.mpuOk);
@@ -128,10 +125,10 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
       onShowSuccessToast(`❌ No hay sesión activa.`);
       return;
     }
-    
+
     setIsStreaming(false);
 
-    const hugValues = oso.streamData.map(r => Number(r.nivelDer || 1) * 10);
+    const hugValues: number[] = oso.streamData.map(r => r.apreton ? 100 : 0);
     const avgHug = hugValues.length ? Math.round(hugValues.reduce((a, b) => a + b, 0) / hugValues.length) : 0;
     const maxHug = hugValues.length ? Math.max(...hugValues) : 0;
 
@@ -162,10 +159,10 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
 
   return (
     <div className="space-y-6">
-      
+
       {/* ─── Top Control Bar: Estado del Peluche y Conexión ─── */}
       <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        
+
         {/* Dispositivo y Paciente */}
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-xl">
@@ -183,7 +180,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
 
         {/* Indicadores de Conexión */}
         <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
-          
+
           {/* Estado Hardware Oso */}
           {oso.isDeviceConnected ? (
             <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 rounded-xl shadow-xs">
@@ -241,18 +238,18 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
 
           <div className="flex justify-center items-center gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400 pt-2">
             <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping"></span>
-            <span>Escuchando sensores del peluche (ADC 32, 33 / SW 18, 19 / MPU6050)...</span>
+            <span>Escuchando sensores del peluche (apreton, contactos y sacudidas)...</span>
           </div>
         </div>
       ) : (
         <>
           {/* ─── 4 Tarjetas de Sensores del Peluche (Conforme al código ESP32) ─── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+
             {/* Tarjeta 1: Apretón - GPIO 32 */}
             <div className={`p-5 rounded-2xl border transition-all ${
-              currentApreton 
-                ? 'bg-emerald-500 text-white border-emerald-600 shadow-md shadow-emerald-500/20' 
+              currentApreton
+                ? 'bg-emerald-500 text-white border-emerald-600 shadow-md shadow-emerald-500/20'
                 : 'bg-white border-slate-100 shadow-xs'
             }`}>
               <div className="flex justify-between items-center mb-2">
@@ -275,7 +272,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
               </div>
               <div className="mt-3">
                 <div className={`w-full rounded-full h-2 overflow-hidden ${currentApreton ? 'bg-emerald-600' : 'bg-slate-100'}`}>
-                  <div 
+                  <div
                     className={`h-2 rounded-full transition-all duration-200 ${currentApreton ? 'bg-white' : 'bg-teal-500'}`}
                     style={{ width: `${Math.min(100, (currentFlexIzq / 1500) * 100)}%` }}
                   ></div>
@@ -288,43 +285,6 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
               </div>
             </div>
 
-            {/* Tarjeta 2: Flex Derecho - GPIO 33 */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-xs">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Flex Derecho (GPIO 33)
-                </span>
-                <span className="text-xs font-black text-purple-700 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-full">
-                  Nivel {currentNivelDer}/10
-                </span>
-              </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <div>
-                  <span className="text-3xl font-black text-slate-800">{currentNivelDer}</span>
-                  <span className="text-xs text-slate-400 font-bold ml-1">/ 10</span>
-                </div>
-                <span className="text-xs font-mono font-bold text-purple-600">ADC: {currentFlexDer}</span>
-              </div>
-              {/* Curvatura dinámica del flex */}
-              <div className="mt-2">
-                <svg className="w-full h-9" viewBox="0 0 260 50">
-                  <path 
-                    d={`M 15 25 Q 130 ${25 + currentNivelDer * 2.5} 245 25`}
-                    stroke="#a855f7" 
-                    strokeWidth="5" 
-                    strokeLinecap="round" 
-                    fill="none" 
-                  />
-                </svg>
-                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                  <div 
-                    className="bg-purple-600 h-1.5 rounded-full transition-all duration-200"
-                    style={{ width: `${currentNivelDer * 10}%` }}
-                  ></div>
-                </div>
-              </div>
-            </div>
-
             {/* Tarjeta 3: Finales de Carrera (GPIO 18 y GPIO 19) */}
             <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-xs flex flex-col justify-between">
               <div className="flex justify-between items-center mb-1">
@@ -333,12 +293,12 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
                 </span>
                 <span className="text-[9px] font-black text-slate-400 uppercase">GPIO 18 / 19</span>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-2 mt-2">
                 {/* Switch Izquierdo */}
                 <div className={`p-2.5 rounded-xl border text-center transition-all ${
-                  currentSwIzq 
-                    ? 'bg-emerald-500 text-white border-emerald-600 shadow-xs' 
+                  currentSwIzq
+                    ? 'bg-emerald-500 text-white border-emerald-600 shadow-xs'
                     : 'bg-slate-50 text-slate-600 border-slate-200'
                 }`}>
                   <span className="text-[9px] font-black block uppercase tracking-wider opacity-80">Brazo Izq (18)</span>
@@ -347,8 +307,8 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
 
                 {/* Switch Derecho */}
                 <div className={`p-2.5 rounded-xl border text-center transition-all ${
-                  currentSwDer 
-                    ? 'bg-emerald-500 text-white border-emerald-600 shadow-xs' 
+                  currentSwDer
+                    ? 'bg-emerald-500 text-white border-emerald-600 shadow-xs'
                     : 'bg-slate-50 text-slate-600 border-slate-200'
                 }`}>
                   <span className="text-[9px] font-black block uppercase tracking-wider opacity-80">Brazo Der (19)</span>
@@ -365,39 +325,35 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
             <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-xs flex flex-col justify-between">
               <div className="flex justify-between items-center mb-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Cinemática MPU6050
+                  Sacudidas del peluche
                 </span>
                 <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
                   currentMpu ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' : 'bg-rose-50 text-rose-700'
                 }`}>
-                  {currentMpu ? 'MPU OK' : 'SIN MPU'}
+                  {currentMpu ? 'Sensor activo' : 'Sin sensor'}
                 </span>
               </div>
 
               <div className="mt-1 flex items-baseline justify-between">
                 <div>
-                  <span className="text-3xl font-black text-slate-800">{currentMovimiento.toFixed(1)}</span>
-                  <span className="text-xs text-slate-400 font-bold ml-1">/ 100</span>
+                  <span className="text-3xl font-black text-slate-800">{currentMpu ? shakeScore(currentMovimiento) : "--"}</span>
+                  <span className="text-xs text-slate-400 font-bold ml-1">/ 10</span>
                 </div>
                 <span className="text-[10px] font-bold uppercase text-indigo-600">
-                  {currentMovimiento > 40 ? 'Agitación' : currentMovimiento > 15 ? 'Moderado' : 'Calma'}
+                  {currentMpu ? shakeLevel(currentMovimiento) : "Sin lectura"}
                 </span>
               </div>
 
               <div className="mt-2">
                 <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                  <div 
+                  <div
                     className={`h-2 rounded-full transition-all duration-200 ${
-                      currentMovimiento > 50 ? 'bg-rose-500' : currentMovimiento > 25 ? 'bg-amber-500' : 'bg-indigo-600'
+                      currentMovimiento >= 60 ? 'bg-rose-500' : currentMovimiento >= 30 ? 'bg-amber-500' : 'bg-indigo-600'
                     }`}
                     style={{ width: `${Math.min(100, currentMovimiento)}%` }}
                   ></div>
                 </div>
-                <div className="flex justify-between items-center text-[9px] font-mono text-slate-500 mt-1">
-                  <span>Giro X:{latestReading.giroX?.toFixed(0) || 0}°</span>
-                  <span>Y:{latestReading.giroY?.toFixed(0) || 0}°</span>
-                  <span>Z:{latestReading.giroZ?.toFixed(0) || 0}°</span>
-                </div>
+
               </div>
             </div>
 
@@ -419,7 +375,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
 
             {activeRole === 'PSICOLOGIA_CLINICA' && (
               <PsychologistDashboard
-                currentHugForce={currentNivelDer * 10}
+                currentHugForce={currentApreton ? 100 : 0}
                 avgHugForce={oso.avgHugForce}
                 onAddTrigger={(trigger) => setTriggers(prev => [...prev, trigger])}
                 triggers={triggers}
@@ -431,13 +387,12 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
 
             {activeRole === 'FISIOTERAPIA' && (
               <OccupationalDashboard
-                currentHugForce={currentNivelDer * 10}
+                currentHugForce={currentApreton ? 100 : 0}
                 maxGripForce={oso.maxGripForce}
                 bilateralTouchSync={oso.bilateralTouchSync}
                 fatigueCheckmarks={fatigueCheckmarks}
                 onToggleFatigueCheckmark={(key) => setFatigueCheckmarks(prev => ({ ...prev, [key]: !prev[key] }))}
-                nivelDer={currentNivelDer}
-                flexDer={currentFlexDer}
+                apreton={currentApreton}
                 switchIzq={currentSwIzq}
                 switchDer={currentSwDer}
               />
@@ -449,12 +404,6 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
                 secondsElapsed={oso.secondsElapsed}
                 movimiento={currentMovimiento}
                 mpuOk={currentMpu}
-                giroX={latestReading.giroX || 0}
-                giroY={latestReading.giroY || 0}
-                giroZ={latestReading.giroZ || 0}
-                accX={latestReading.accX || 0}
-                accY={latestReading.accY || 0}
-                accZ={latestReading.accZ || 1}
               />
             )}
 
@@ -466,16 +415,11 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
                     Lectura ADC: {currentFlexIzq} | Estado: {currentApreton ? 'Apretón Detectado' : 'Libre'}
                   </p>
                 </div>
+
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="font-bold text-slate-700 block mb-1">Flexión Articular (GPIO 33)</span>
+                  <span className="font-bold text-slate-700 block mb-1">Sacudidas del peluche</span>
                   <p className="text-[11px] text-slate-500">
-                    Nivel Clínico: {currentNivelDer}/10 | ADC: {currentFlexDer}
-                  </p>
-                </div>
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="font-bold text-slate-700 block mb-1">Cinemática MPU6050</span>
-                  <p className="text-[11px] text-slate-500">
-                    Movimiento: {currentMovimiento.toFixed(1)}/100 | Tics: {oso.stereotypicalTicks}
+                    Sacudida: {currentMpu ? shakeLevel(currentMovimiento) : "Sin sensor"} | Sacudidas fuertes: {oso.stereotypicalTicks}
                   </p>
                 </div>
               </div>
@@ -493,29 +437,24 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
               </div>
               <div className="flex items-center gap-3 text-[10px] font-bold uppercase text-slate-400">
                 <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500"></span> Apretón ADC</span>
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-purple-500"></span> Flex Derecho</span>
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-indigo-500"></span> Movimiento MPU</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-indigo-500"></span> Sacudidas</span>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
+
               {/* Gráfico 1: Flexión y Apretón Táctil */}
               <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs">
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-2">
-                  1. Apretón Táctil (GPIO 32) y Flexión Derecha (GPIO 33)
+                  1. Apreton del peluche
                 </span>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={oso.streamData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                    <AreaChart data={oso.streamData.slice(-100).map(r => ({ ...r, sacudida: shakeScore(r.movimiento ?? 0) }))} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorFlexIzq" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#10b981" stopOpacity={0.25}/>
                           <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                        </linearGradient>
-                        <linearGradient id="colorFlexDer" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#a855f7" stopOpacity={0.2}/>
-                          <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -534,29 +473,20 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
                         fill="url(#colorFlexIzq)"
                         isAnimationActive={false}
                       />
-                      <Area
-                        type="monotone"
-                        name="Flex Derecho ADC (GPIO 33)"
-                        dataKey="flexDer"
-                        stroke="#a855f7"
-                        strokeWidth={2}
-                        fillOpacity={1}
-                        fill="url(#colorFlexDer)"
-                        isAnimationActive={false}
-                      />
+
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              {/* Gráfico 2: Cinemática e Intensidad de Movimiento MPU6050 */}
+              {/* Gráfico 2: Cinemática e Intensidad de Sacudidas6050 */}
               <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs">
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-2">
-                  2. Intensidad de Movimiento Relativo (MPU6050 / 100)
+                  2. Intensidad aproximada de sacudida (0 a 10)
                 </span>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={oso.streamData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                    <AreaChart data={oso.streamData.slice(-100).map(r => ({ ...r, sacudida: shakeScore(r.movimiento ?? 0) }))} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorMov" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25}/>
@@ -565,14 +495,14 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="timestamp" stroke="#94a3b8" fontSize={9} tickLine={false} />
-                      <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} domain={[0, 100]} />
+                      <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} domain={[0, 10]} />
                       <Tooltip />
                       <Legend verticalAlign="top" height={30} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10, fontWeight: 'bold' }} />
-                      <ReferenceLine y={50} stroke="#f43f5e" strokeDasharray="3 3" label={{ value: 'Alerta Agitación (50)', fill: '#f43f5e', fontSize: 9 }} />
+                      <ReferenceLine y={6} stroke="#f43f5e" strokeDasharray="3 3" />
                       <Area
                         type="monotone"
-                        name="Movimiento / Agitación (0-100)"
-                        dataKey="movimiento"
+                        name="Sacudida aproximada (0-10)"
+                        dataKey="sacudida"
                         stroke="#6366f1"
                         strokeWidth={2.5}
                         fillOpacity={1}
@@ -592,7 +522,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
               Control de Sesión Clínica (Peluche NeuroRobi)
             </span>
-            
+
             <button
               onClick={handleEndSession}
               className="w-full flex items-center justify-center gap-2.5 py-4 px-5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-rose-600/20 active:scale-98 transition-all cursor-pointer"
@@ -600,7 +530,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
               <Square size={14} fill="currentColor" />
               Finalizar Sesión Terapéutica y Guardar Reporte
             </button>
-            
+
             <span className="text-[9px] text-slate-400 mt-2 font-bold uppercase tracking-wider text-center">
               Consolida métricas del peluche en el expediente del paciente
             </span>

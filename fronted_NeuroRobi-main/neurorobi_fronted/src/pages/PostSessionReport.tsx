@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { shakeScore } from '../utils/movement';
 import { usePatients } from '../context/PatientContext';
 import { useRole } from '../context/RoleContext';
 import { AddClinicalNoteForm } from '../components/forms/AddClinicalNoteForm';
@@ -21,7 +22,6 @@ import {
   ShieldCheck,
   Compass,
   Printer,
-  Layers
 } from 'lucide-react';
 import { PrintReportModal } from '../components/shared/PrintReportModal';
 
@@ -31,7 +31,7 @@ interface PostSessionReportProps {
   onShowErrorToast?: (msg: string) => void;
 }
 
-type SegmentTab = 'pressure' | 'flex' | 'gyro';
+type SegmentTab = 'pressure' | 'gyro';
 
 export const PostSessionReport: React.FC<PostSessionReportProps> = ({
   onArchiveSuccess,
@@ -76,7 +76,6 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
 
   const getFilteredSpikes = () => {
     if (activeTab === 'pressure') return spikesLog.filter(s => s.type === 'Presión');
-    if (activeTab === 'flex') return spikesLog.filter(s => s.type === 'Flexión Articular');
     return spikesLog.filter(s => s.type === 'Cinemática');
   };
 
@@ -99,19 +98,10 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
 
   const getTabBorderColor = (tab: SegmentTab) => {
     if (tab === 'pressure') return activeTab === 'pressure' ? 'border-teal-600 bg-teal-50 text-teal-700' : 'border-slate-100 hover:bg-slate-50 text-slate-600';
-    if (tab === 'flex') return activeTab === 'flex' ? 'border-purple-600 bg-purple-50 text-purple-700' : 'border-slate-100 hover:bg-slate-50 text-slate-600';
     return activeTab === 'gyro' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:bg-slate-50 text-slate-600';
   };
 
   // Muestras reales del Peluche
-  const flexDerSamples = sensorHistory
-    .map((r: any) => Number(r.nivelDer ?? (r.hugForce ? Math.round(r.hugForce / 10) : 0)))
-    .filter(v => v > 0);
-  const avgNivelDer = flexDerSamples.length 
-    ? (flexDerSamples.reduce((a, b) => a + b, 0) / flexDerSamples.length).toFixed(1)
-    : '0';
-  const maxNivelDer = flexDerSamples.length ? Math.max(...flexDerSamples) : 0;
-
   // Estabilidad MPU6050
   const movSamples = sensorHistory.map((r: any) => Number(r.movimiento ?? r.shakeIntensity ?? 0));
   const movTotal = movSamples.length;
@@ -161,7 +151,7 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
       </div>
 
       {/* 2. Analytical Selector Segment Buttons (A, B, C) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         
         {/* Button A: Pressure */}
         <button
@@ -175,18 +165,6 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
           </div>
         </button>
 
-        {/* Button B: Flex Derecho */}
-        <button
-          onClick={() => setActiveTab('flex')}
-          className={`flex items-center gap-3 px-5 py-4 border-2 rounded-2xl text-left font-bold text-xs uppercase tracking-wider cursor-pointer transition-all ${getTabBorderColor('flex')}`}
-        >
-          <Layers size={16} />
-          <div className="flex flex-col items-start leading-none gap-1">
-            <span>B. Flexión Articular (GPIO 33)</span>
-            <span className="text-[9px] font-bold opacity-60">Nivel Promedio: {avgNivelDer}/10</span>
-          </div>
-        </button>
-
         {/* Button C: Kinematic MPU6050 */}
         <button
           onClick={() => setActiveTab('gyro')}
@@ -194,7 +172,7 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
         >
           <Compass size={16} />
           <div className="flex flex-col items-start leading-none gap-1">
-            <span>C. Cinemática / MPU6050</span>
+            <span>B. Sacudidas del peluche</span>
             <span className="text-[9px] font-bold opacity-60">Calma: {calmValue}%</span>
           </div>
         </button>
@@ -209,8 +187,7 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
           <div className="mb-4">
             <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
               {activeTab === 'pressure' && 'Historial de Apretón Afectivo (GPIO 32 - ADC)'}
-              {activeTab === 'flex' && 'Historial de Flexión del Brazo Derecho (GPIO 33 - Nivel 1 a 10)'}
-              {activeTab === 'gyro' && 'Historial de Intensidad de Movimiento Cinemático (MPU6050)'}
+              {activeTab === 'gyro' && 'Intensidad aproximada de sacudidas (0 a 10)'}
             </h3>
             <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Telemetría archivada durante la sesión del Peluche.</p>
           </div>
@@ -222,7 +199,7 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={sensorHistory} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                <AreaChart data={sensorHistory.map(r => ({ ...r, sacudida: shakeScore(r.movimiento ?? r.shakeIntensity ?? 0) }))} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="timestamp" stroke="#94a3b8" fontSize={9} tickLine={false} />
                   <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} />
@@ -232,29 +209,21 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
                     dataKey={
                       activeTab === 'pressure' 
                         ? 'flexIzq' 
-                        : activeTab === 'flex' 
-                        ? 'nivelDer' 
-                        : 'movimiento'
+                        : 'sacudida'
                     }
                     name={
                       activeTab === 'pressure' 
                         ? 'Apretón ADC' 
-                        : activeTab === 'flex' 
-                        ? 'Nivel de Flexión (1-10)' 
-                        : 'Intensidad Movimiento (0-100)'
+                        : 'Sacudida aproximada (0-10)'
                     }
                     stroke={
                       activeTab === 'pressure' 
                         ? '#0d9488' 
-                        : activeTab === 'flex' 
-                        ? '#a855f7' 
                         : '#6366f1'
                     }
                     fill={
                       activeTab === 'pressure' 
                         ? '#ccfbf1' 
-                        : activeTab === 'flex' 
-                        ? '#f3e8ff' 
                         : '#e0e7ff'
                     }
                     strokeWidth={2.5}
@@ -294,42 +263,11 @@ export const PostSessionReport: React.FC<PostSessionReportProps> = ({
             </div>
           )}
 
-          {/* TAB B: FLEXION ARTICULAR */}
-          {activeTab === 'flex' && (
-            <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs h-full flex flex-col justify-between">
-              <div>
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Flexión Articular y Switches</h4>
-                
-                <div className="space-y-4 my-2">
-                  <div className="bg-purple-50 border border-purple-100 rounded-2xl p-4 text-center">
-                    <span className="text-3xl font-black text-purple-900">{avgNivelDer} <span className="text-xs font-bold text-purple-500">/ 10</span></span>
-                    <p className="text-[9px] font-bold text-purple-500 uppercase mt-1">Nivel Promedio Brazo Derecho</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-center">
-                    <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                      <span className="text-lg font-black text-slate-800">{maxNivelDer}/10</span>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase">Flexión Pico</p>
-                    </div>
-                    <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                      <span className="text-lg font-black text-emerald-700">{metrics.bilateralSync || 75}%</span>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase">Sincronía SW</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 text-[11px] text-slate-500 leading-relaxed font-semibold">
-                * Rango de movimiento articular del peluche medido en GPIO 33 y coordinación con finales de carrera (SW18/19).
-              </div>
-            </div>
-          )}
-
           {/* TAB C: MPU6050 GYROSCOPE */}
           {activeTab === 'gyro' && (
             <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs h-full flex flex-col justify-between">
               <div>
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Mapa de Estabilidad Motriz MPU6050</h4>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Resumen de movimiento del peluche</h4>
                 
                 <div className="h-32 w-full flex items-center justify-center my-2">
                   <ResponsiveContainer width="100%" height="100%">

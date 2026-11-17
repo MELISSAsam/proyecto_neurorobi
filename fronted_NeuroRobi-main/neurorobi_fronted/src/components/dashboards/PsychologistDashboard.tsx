@@ -1,3 +1,4 @@
+import { shakeLevel, shakeScore } from '../../utils/movement';
 import React, { useState } from 'react';
 import { Heart, Plus, Tag } from 'lucide-react';
 
@@ -103,15 +104,15 @@ export const PsychologistDashboard: React.FC<PsychologistDashboardProps> = ({
         {/* Agitation bar from MPU6050 */}
         <div className="mt-4 pt-4 border-t border-slate-50">
           <div className="flex justify-between items-center mb-1.5">
-            <span className="text-[11px] font-bold text-slate-500 uppercase">Índice de Agitación Cinemática (MPU6050)</span>
-            <span className="text-xs font-bold text-slate-700">{agitationPercentage}%</span>
+            <span className="text-[11px] font-bold text-slate-500 uppercase">Sacudida del peluche</span>
+            <span className="text-xs font-bold text-slate-700">{shakeLevel(movimiento)} ({shakeScore(movimiento)}/10)</span>
           </div>
           <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
             <div 
               className={`h-2.5 rounded-full transition-all duration-300 ${
                 agitationPercentage > 50 ? 'bg-rose-500' : agitationPercentage > 25 ? 'bg-amber-500' : 'bg-teal-500'
               }`}
-              style={{ width: `${agitationPercentage}%` }}
+              style={{ width: `${shakeLevel(movimiento)} ({shakeScore(movimiento)}/10)` }}
             ></div>
           </div>
           <span className="text-[9px] text-slate-400 mt-1 block">

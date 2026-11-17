@@ -8,8 +8,7 @@ interface OccupationalDashboardProps {
   fatigueCheckmarks: Record<string, boolean>;
   onToggleFatigueCheckmark: (key: string) => void;
   // Campos del Peluche
-  nivelDer?: number;
-  flexDer?: number;
+  apreton?: boolean;
   switchIzq?: boolean;
   switchDer?: boolean;
 }
@@ -20,8 +19,7 @@ export const OccupationalDashboard: React.FC<OccupationalDashboardProps> = ({
   bilateralTouchSync,
   fatigueCheckmarks,
   onToggleFatigueCheckmark,
-  nivelDer = 1,
-  flexDer = 0,
+  apreton = false,
   switchIzq = false,
   switchDer = false
 }) => {
@@ -43,16 +41,15 @@ export const OccupationalDashboard: React.FC<OccupationalDashboardProps> = ({
       <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Flexión y Coordinación Bilateral (Peluche)</h4>
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Apreton y coordinacion del peluche</h4>
             <span className="text-emerald-500"><Sparkles size={16} /></span>
           </div>
 
           {/* Flex Der & Switch status */}
           <div className="grid grid-cols-2 gap-4 mb-5">
             <div className="bg-purple-50/60 border border-purple-100 rounded-xl p-3.5 flex flex-col justify-center">
-              <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wide">Flex Derecho (GPIO 33)</span>
-              <span className="text-2xl font-black text-purple-900 mt-1">{nivelDer} <span className="text-xs font-bold text-purple-500">/ 10</span></span>
-              <span className="text-[9px] text-purple-500 mt-0.5">ADC: {flexDer}</span>
+              <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wide">Apreton del peluche</span>
+              <span className="text-2xl font-black text-purple-900 mt-1">{apreton ? "Detectado" : "Sin apreton"}</span>
             </div>
             
             <div className="bg-emerald-50/40 border border-emerald-100/50 rounded-xl p-3.5 flex flex-col justify-center">
@@ -93,7 +90,7 @@ export const OccupationalDashboard: React.FC<OccupationalDashboardProps> = ({
         </div>
 
         <div className="text-[10px] text-slate-400 font-medium mt-4 pt-4 border-t border-slate-50 flex items-center gap-1">
-          <AlertCircle size={10} className="text-emerald-500" /> Sensores flex y switches calibrados para el peluche.
+          <AlertCircle size={10} className="text-emerald-500" /> Un sensor de apreton y dos interruptores de contacto.
         </div>
       </div>
 
