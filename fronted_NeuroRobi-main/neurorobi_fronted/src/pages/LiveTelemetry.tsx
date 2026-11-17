@@ -1,3 +1,4 @@
+import { analyze } from '../utils/interactions';
 import axios from 'axios';
 import { useDeviceAvailability } from '../hooks/useDeviceAvailability';
 import React, { useState, useEffect, useRef } from 'react';
@@ -82,6 +83,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
     movimiento: oso.movimiento
   };
 
+  const interactions = analyze(oso.streamData);
   const currentFlexIzq = latestReading.flexIzq ?? oso.flexIzq ?? 0;
   const currentApreton = Boolean(latestReading.apreton ?? oso.apreton);
   const currentSwIzq = Boolean(latestReading.switchIzq ?? oso.switch1Pressed);
@@ -251,7 +253,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
 
           <div className="flex justify-center items-center gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400 pt-2">
             <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping"></span>
-            <span>Escuchando sensores del peluche (apreton, contactos y sacudidas)...</span>
+            <span>Escuchando sensores del peluche (apretones, pulsaciones y sacudidas)...</span>
           </div>
         </div>
       ) : (
@@ -267,7 +269,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
             }`}>
               <div className="flex justify-between items-center mb-2">
                 <span className={`text-[10px] font-bold uppercase tracking-wider ${currentApreton ? 'text-emerald-100' : 'text-slate-400'}`}>
-                  Apretón Táctil (GPIO 32)
+                  Apretones del estomago
                 </span>
                 <span className={`text-xs font-black px-2 py-0.5 rounded-full ${
                   currentApreton ? 'bg-white text-emerald-700' : 'bg-slate-100 text-slate-500'
@@ -277,32 +279,20 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
               </div>
               <div className="mt-2">
                 <span className={`text-3xl font-black ${currentApreton ? 'text-white' : 'text-slate-800'}`}>
-                  {currentFlexIzq}
+                  {interactions.squeezes ?? 0}
                 </span>
                 <span className={`text-xs ml-1 font-bold ${currentApreton ? 'text-emerald-100' : 'text-slate-400'}`}>
-                  ADC
+                  apretones
                 </span>
               </div>
-              <div className="mt-3">
-                <div className={`w-full rounded-full h-2 overflow-hidden ${currentApreton ? 'bg-emerald-600' : 'bg-slate-100'}`}>
-                  <div
-                    className={`h-2 rounded-full transition-all duration-200 ${currentApreton ? 'bg-white' : 'bg-teal-500'}`}
-                    style={{ width: `${Math.min(100, (currentFlexIzq / 1500) * 100)}%` }}
-                  ></div>
-                </div>
-                <div className="flex justify-between items-center mt-1 text-[9px] font-semibold opacity-75">
-                  <span>0</span>
-                  <span>Umbral: 600</span>
-                  <span>4095</span>
-                </div>
-              </div>
+
             </div>
 
-            {/* Tarjeta 3: Finales de Carrera (GPIO 18 y GPIO 19) */}
+            {/* Tarjeta 3: Pulsaciones de brazos (GPIO 18 y GPIO 19) */}
             <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-xs flex flex-col justify-between">
               <div className="flex justify-between items-center mb-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Finales de Carrera
+                  Pulsaciones de brazos
                 </span>
                 <span className="text-[9px] font-black text-slate-400 uppercase">GPIO 18 / 19</span>
               </div>
@@ -330,7 +320,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
               </div>
 
               <span className="text-[9px] text-slate-400 font-semibold mt-2 text-center block">
-                Sincronía bilateral: {oso.bilateralTouchSync}%
+                Pulsaciones: {interactions.contacts ?? 0}
               </span>
             </div>
 

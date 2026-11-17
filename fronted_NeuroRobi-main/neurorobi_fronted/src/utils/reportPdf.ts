@@ -31,10 +31,10 @@ export async function downloadReportPdf(session: ClinicalSession) {
   const validDate = Number.isFinite(Date.parse(session.date));
   for (const value of [`Paciente: ${session.patientName}`, `Terapeuta: ${session.specialistName || 'No disponible en el registro'}`, `Fecha: ${validDate ? new Date(session.date).toLocaleString('es-EC', {timeZone:'America/Guayaquil'}) : 'No disponible'}`, `Duracion: ${clock(session.durationSeconds)}`, `Dispositivo: Oso robotico NeuroRobi | ID: ${session.deviceId || 'No registrado'}`]) line(value);
   y += 5; line('2. Resumen de interacciones', 12, true);
-  line(`Contactos por canal: ${report.contacts ?? 'No disponible'} | Sacudidas fuertes: ${report.shakes ?? 'No disponible'}`);
-  line(`Apreton relativo maximo: ${decimal(report.pressureMax)} % ADC | Promedio: ${decimal(report.pressureAvg)} % ADC`);
+  line(`Pulsaciones de brazos: ${report.contacts ?? 'No disponible'} | Sacudidas fuertes: ${report.shakes ?? 'No disponible'}`);
+  line(`Apretones del estomago: ${decimal(report.pressureMax)} apretones`);
   line(`Tiempo observado de apreton: ${decimal(report.squeezeDuration)} s`);
-  line('Escala relativa ADC 0-4095, sin calibracion de fuerza. Las duraciones son aproximadas y no incluyen intervalos sin senal.', 8);
+  line('Cada activacion del estomago cuenta un apreton. Las duraciones son aproximadas y no incluyen intervalos sin senal.', 8);
   const chart = (field: 'pressure' | 'movement', title: string, max: number, color: [number, number, number]) => {
     space(81); y += 5; line(title, 12, true);
     const top = y + 3, bottom = top + 48, left = 28, width = 160;
@@ -51,7 +51,7 @@ export async function downloadReportPdf(session: ClinicalSession) {
     for(let i=0;i<=5;i++) doc.setFontSize(8).setTextColor(101,124,141).text(clock(total*i/5),left+width*i/5,bottom+6,{align:'center'});
     y = bottom + 13;
   };
-  chart('pressure', '3. Apreton relativo durante la sesion (% ADC)', 100, [17,165,162]);
+  chart('pressure', '3. Conteo de apretones durante la sesion', Math.max(4, Math.ceil((report.squeezes ?? 0) / 4) * 4), [17,165,162]);
   chart('movement', '4. Intensidad aproximada de sacudidas (0 a 10)', 10, [237,140,56]);
   space(22); y += 5; line('5. Detalle cronologico de eventos', 12, true);
   const header = () => { space(12); doc.setFillColor(238,247,250).rect(16,y-4,178,8,'F'); doc.setFontSize(8).setTextColor(23,51,76).text('Tipo',18,y+1).text('Inicio / Fin',76,y+1).text('Duracion',111,y+1).text('Max. / Prom.',145,y+1); y+=11; };
@@ -78,7 +78,7 @@ export async function downloadEvolutionPdf(sessions: ClinicalSession[]) {
   let y=20;
   const text=(value:string,size=10)=>{doc.setFontSize(size); const lines:string[]=doc.splitTextToSize(value,178);for(const line of lines){if(y>266){doc.addPage();y=20;}doc.setTextColor(23,51,76).text(line,16,y);y+=6;}};
   text('NEUROROBI',20);text('Evolucion de interacciones tactiles',15);text(`Paciente: ${ordered[0].patientName}`);text(`Sesiones seleccionadas: ${ordered.length}`);text('Comparacion de registros fisicos: no representa mejoria clinica ni estados emocionales.',9);y+=5;
-  for(const row of rows){text(`${new Date(row.session.date).toLocaleString('es-EC',{timeZone:'America/Guayaquil'})} | ${row.session.id}`,9);text(`Contactos: ${row.contacts??'N/D'} | Sacudidas: ${row.shakes??'N/D'} | Apreton observado: ${decimal(row.squeezeDuration)} s`,9);text(`Apreton maximo: ${decimal(row.pressureMax)} % ADC | Promedio: ${decimal(row.pressureAvg)} % ADC`,9);y+=2;}
+  for(const row of rows){text(`${new Date(row.session.date).toLocaleString('es-EC',{timeZone:'America/Guayaquil'})} | ${row.session.id}`,9);text(`Pulsaciones: ${row.contacts??'N/D'} | Sacudidas: ${row.shakes??'N/D'} | Apreton observado: ${decimal(row.squeezeDuration)} s`,9);text(`Apretones: ${decimal(row.pressureMax)} apretones`,9);y+=2;}
   const graph=(title:string,series:{label:string;color:[number,number,number];values:(number|null)[]}[],fixedMax?:number)=>{
     if(y+85>267){doc.addPage();y=20;}y+=5;text(title,12);const left=28,top=y+3,bottom=top+48,width=158;
     const values=series.flatMap(s=>s.values.filter((v):v is number=>v!==null));const max=fixedMax??Math.max(1,...values);
@@ -87,7 +87,7 @@ export async function downloadEvolutionPdf(sessions: ClinicalSession[]) {
     rows.forEach((_,i)=>doc.setFontSize(8).setTextColor(101,124,141).text(String(i+1),left+i/Math.max(1,rows.length-1)*width,bottom+6,{align:'center'}));y=bottom+14;for(const s of series)text(s.label,8);
   };
   graph('Contactos y sacudidas por sesion (orden cronologico)',[{label:'Turquesa: contactos',color:[17,165,162],values:rows.map(r=>r.contacts)},{label:'Naranja: sacudidas fuertes',color:[237,140,56],values:rows.map(r=>r.shakes)}]);
-  graph('Apreton relativo por sesion (% ADC)',[{label:'Azul: maximo',color:[18,111,135],values:rows.map(r=>r.pressureMax)},{label:'Turquesa: promedio',color:[17,165,162],values:rows.map(r=>r.pressureAvg)}],100);
+  graph('Conteo de apretones por sesion',[{label:'Azul: apretones',color:[18,111,135],values:rows.map(r=>r.pressureMax)}]);
   text('Observaciones profesionales por sesion',12);for(const row of rows){text(row.session.id,9);text(row.session.notes?.trim()||'Sin observaciones registradas.');y+=3;}
   const count=doc.getNumberOfPages();for(let i=1;i<=count;i++){doc.setPage(i).setFontSize(7).setTextColor(101,124,141).text('Herramienta de apoyo al seguimiento terapeutico. No realiza diagnosticos automaticos.',16,282).text(`Emision: ${new Date().toLocaleDateString('es-EC',{timeZone:'America/Guayaquil'})} | Pagina ${i} de ${count}`,16,287);}
   doc.save(`NeuroRobi-evolucion-${ordered[0].patientId.replace(/[^a-z0-9_-]/gi,'_')}.pdf`);

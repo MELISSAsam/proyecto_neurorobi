@@ -1,5 +1,5 @@
 import type { SensorReading } from '../types';
-export type Kind = 'Apreton' | 'Contacto izquierdo' | 'Contacto derecho' | 'Sacudida fuerte';
+export type Kind = 'Apreton' | 'Pulsacion brazo izquierdo' | 'Pulsacion brazo derecho' | 'Sacudida fuerte';
 export interface Point { t: number; pressure: number | null; movement: number | null; squeeze: boolean | null; left: boolean | null; right: boolean | null; }
 export interface Interaction { id: string; kind: Kind; start: number; end: number; duration: number; max: number | null; avg: number | null; partial: boolean; unit: string; }
 const numberOrNull = (v: unknown) => typeof v === 'number' && Number.isFinite(v) ? v : null;
@@ -23,7 +23,7 @@ export function analyze(readings: Partial<SensorReading>[]) {
     }
     if (t === null || t < 0 || (points.length > 0 && t < points[points.length - 1].t)) continue;
     const raw = numberOrNull(r.flexIzq);
-    const pressure = raw !== null && raw >= 0 && raw <= 4095 ? raw / 4095 * 100 : null;
+    const pressure = null; // Se completa con el conteo acumulado de apretones.
     const motion = numberOrNull(r.movimiento ?? r.shakeIntensity);
     const movement = r.mpu === false || motion === null || motion < 0 || motion > 100 ? null : motion / 10;
     points.push({ t, pressure, movement, squeeze: typeof r.apreton === 'boolean' ? r.apreton : raw !== null ? raw > 600 : null,
@@ -32,9 +32,9 @@ export function analyze(readings: Partial<SensorReading>[]) {
   }
   const events: Interaction[] = [];
   const channels: { kind: Kind; active: (p: Point) => boolean | null; value: (p: Point) => number | null; unit: string }[] = [
-    { kind: 'Apreton', active: p => p.squeeze, value: p => p.pressure, unit: '% ADC' },
-    { kind: 'Contacto izquierdo', active: p => p.left, value: () => 1, unit: 'activado' },
-    { kind: 'Contacto derecho', active: p => p.right, value: () => 1, unit: 'activado' },
+    { kind: 'Apreton', active: p => p.squeeze, value: () => 1, unit: 'apreton' },
+    { kind: 'Pulsacion brazo izquierdo', active: p => p.left, value: () => 1, unit: 'activado' },
+    { kind: 'Pulsacion brazo derecho', active: p => p.right, value: () => 1, unit: 'activado' },
     { kind: 'Sacudida fuerte', active: p => p.movement === null ? null : p.movement >= 6, value: p => p.movement, unit: '/10' }
   ];
   for (const channel of channels) {
@@ -60,13 +60,19 @@ export function analyze(readings: Partial<SensorReading>[]) {
     if (last) close(last.t, true);
   }
   events.sort((a, b) => a.start - b.start);
-  const pressures = points.flatMap(p => p.pressure === null ? [] : [p.pressure]);
-  const tactile = events.filter(e => e.kind !== 'Sacudida fuerte');
-  const hasContacts = points.some(p => p.squeeze !== null || p.left !== null || p.right !== null);
+  let squeezeCount = 0;
+  for (const point of points) {
+    squeezeCount = events.filter(e => e.kind === 'Apreton' && e.start <= point.t).length;
+    point.pressure = point.squeeze === null ? null : squeezeCount;
+  }
+  const squeezes = points.some(p => p.squeeze !== null) ? events.filter(e => e.kind === 'Apreton').length : null;
+  const tactile = events.filter(e => e.kind.startsWith('Pulsacion'));
+  const hasContacts = points.some(p => p.left !== null || p.right !== null);
   return { points, events, contacts: hasContacts ? tactile.length : null,
     shakes: points.some(p => p.movement !== null) ? events.filter(e => e.kind === 'Sacudida fuerte').length : null,
-    pressureMax: pressures.length ? pressures.reduce((a, b) => Math.max(a, b)) : null,
-    pressureAvg: pressures.length ? pressures.reduce((a, b) => a + b, 0) / pressures.length : null,
+    squeezes,
+    pressureMax: squeezes,
+    pressureAvg: squeezes,
     // Duracion de apreton observada: los contactos simultaneos no se suman.
     squeezeDuration: points.some(p => p.squeeze !== null) ? events.filter(e => e.kind === 'Apreton').reduce((n, e) => n + e.duration, 0) : null,
     hasGaps: points.some((p, i) => i > 0 && p.t - points[i - 1].t > 2) };

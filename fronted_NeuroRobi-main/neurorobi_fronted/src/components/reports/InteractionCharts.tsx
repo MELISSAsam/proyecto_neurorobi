@@ -4,8 +4,8 @@ import { analyze, chartPoints, clock, decimal } from '../../utils/interactions';
 import type { Analysis, Point } from '../../utils/interactions';
 export function SensorChart({ analysis, field, title, staticView = false }: { analysis: Analysis; field: 'pressure' | 'movement'; title: string; staticView?: boolean }) {
   const [selected, setSelected] = useState<number | null>(null);
-  const points = analysis.points, max = field === 'pressure' ? 100 : 10;
-  const color = field === 'pressure' ? '#11a5a2' : '#ed8c38', unit = field === 'pressure' ? '% ADC' : '/10';
+  const points = analysis.points, max = field === 'pressure' ? Math.max(4, Math.ceil((analysis.squeezes ?? 0) / 4) * 4) : 10;
+  const color = field === 'pressure' ? '#11a5a2' : '#ed8c38', unit = field === 'pressure' ? 'apretones' : '/10';
   const samples = useMemo(() => chartPoints(points, field), [points, field]);
   const total = Math.max(1, points[points.length - 1]?.t || 1);
   const x = (t: number) => 50 + t / total * 720, y = (v: number) => 195 - v / max * 165;
@@ -19,7 +19,7 @@ export function SensorChart({ analysis, field, title, staticView = false }: { an
   const chosen = selected === null ? null : points[Math.min(selected, points.length - 1)];
   const event = chosen && analysis.events.find(e => e.start <= chosen.t && e.end >= chosen.t && (field === 'pressure' ? e.kind === 'Apreton' : e.kind === 'Sacudida fuerte'));
   return <section className="interaction-chart rounded-2xl border border-slate-100 bg-white p-4 sm:p-6 shadow-sm">
-    <div className="flex flex-wrap justify-between gap-2"><h3 className="font-bold text-slate-800">{title}</h3><span className="text-xs text-slate-500">{field === 'pressure' ? 'Nivel relativo del sensor (% ADC)' : 'Intensidad aproximada (0 a 10)'}</span></div>
+    <div className="flex flex-wrap justify-between gap-2"><h3 className="font-bold text-slate-800">{title}</h3><span className="text-xs text-slate-500">{field === 'pressure' ? 'Conteo acumulado de apretones' : 'Intensidad aproximada (0 a 10)'}</span></div>
     {!points.some(p => p[field] !== null) ? <p className="py-16 text-center text-sm text-slate-500">Sin mediciones disponibles para este sensor.</p> : <>
       <svg viewBox="0 0 800 230" className="w-full min-h-44 touch-pan-y" role="img" aria-label={title}
         onPointerMove={e => { if (staticView) return; const box = e.currentTarget.getBoundingClientRect(); const t = Math.max(0, Math.min(total, ((e.clientX - box.left) / box.width * 800 - 50) / 720 * total)); let low = 0, high = points.length - 1; while (low < high) { const middle = Math.floor((low + high) / 2); if (points[middle].t < t) low = middle + 1; else high = middle; } const index = low > 0 && Math.abs(points[low - 1].t - t) < Math.abs(points[low].t - t) ? low - 1 : low; setSelected(index); }}>
@@ -34,10 +34,10 @@ export function SensorChart({ analysis, field, title, staticView = false }: { an
           {event ? <p>{event.kind} · Inicio {clock(event.start)} · Fin observado {clock(event.end)} · Duración {event.partial ? 'al menos ' : ''}{event.duration.toFixed(1)} s · Máximo {decimal(event.max)} {event.unit} · Promedio {decimal(event.avg)} {event.unit}</p> : <p>Sin evento de este tipo en el instante seleccionado.</p>}</> : 'Mueve el cursor o toca la gráfica para consultar un instante y su evento.'}
       </div>}
     </>}
-    <p className="text-[11px] text-slate-400 mt-3">{field === 'pressure' ? 'Escala ADC 0-4095 convertida a porcentaje: no representa fuerza ni presión calibrada.' : 'Indicador fisico de movimiento. No determina emociones ni diagnósticos.'}</p>
+    <p className="text-[11px] text-slate-400 mt-3">{field === 'pressure' ? 'Cada nueva activacion del estomago suma un apreton; mantenerlo presionado cuenta una sola vez.' : 'Indicador fisico de movimiento. No determina emociones ni diagnósticos.'}</p>
   </section>;
 }
 export function InteractionCharts({ readings, staticView = false }: { readings: Partial<SensorReading>[]; staticView?: boolean }) {
   const analysis = useMemo(() => analyze(readings), [readings]);
-  return <div className="grid gap-5"><SensorChart analysis={analysis} field="pressure" title="Apreton a lo largo del tiempo" staticView={staticView}/><SensorChart analysis={analysis} field="movement" title="Intensidad de sacudidas" staticView={staticView}/></div>;
+  return <div className="grid gap-5"><SensorChart analysis={analysis} field="pressure" title="Conteo de apretones del estomago" staticView={staticView}/><SensorChart analysis={analysis} field="movement" title="Intensidad de sacudidas" staticView={staticView}/></div>;
 }
