@@ -69,6 +69,10 @@ async function main() {
     patientId: patient.id, specialistId: login.user.id, durationSeconds: 60, metrics: {}, notes: 'Smoke session', sensorHistory: [{ timestamp: '12:00:00', flexIzq: 750, apreton: true, switchIzq: true, switchDer: false, mpu: true, accX: 0.1, accY: 0.2, accZ: 1, giroX: 3, giroY: 0, giroZ: 0, movimiento: 1 }]
   }) }, 201);
   assert.equal((await request(`/api/sessions/${session.id}`, { headers })).notes, 'Smoke session');
+  assert.equal(session.specialistName, 'Multipart Admin');
+  await request('/api/sessions/' + session.id + '/notes', { method: 'PATCH', headers, body: JSON.stringify({ notes: 'Observacion profesional guardada' }) });
+  assert.equal((await request('/api/sessions/' + session.id, { headers })).notes, 'Observacion profesional guardada');
+  await request('/api/sessions/' + session.id + '/notes', { method: 'PATCH', headers, body: JSON.stringify({ notes: 'Smoke session' }) });
   assert.equal(session.sensorHistory[0].flexIzq, 750);
   assert.equal(session.sensorHistory[0].switchIzq, true);
   await request('/api/stats', { headers });
@@ -78,6 +82,7 @@ async function main() {
   const stored = db.prepare('SELECT payload FROM TelemetryPacket ORDER BY id DESC LIMIT 1').get();
   assert.equal(JSON.parse(stored.payload).flexIzq, 750);
   assert.equal(JSON.parse(stored.payload).mpu, true);
+  assert.ok(Number.isFinite(Date.parse(JSON.parse(stored.payload).receivedAt)));
   assert.equal(JSON.parse(stored.payload).hugForce, 100);
   assert.equal(JSON.parse(stored.payload).flexDer, undefined);
   assert.equal(JSON.parse(stored.payload).nivelDer, undefined);

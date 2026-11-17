@@ -21,6 +21,8 @@ export interface Patient {
 }
 
 export interface SensorReading {
+  receivedAt?: string;
+  elapsedMs?: number;
   timestamp: string; // HH:MM:SS
   deviceType: 'oso';
   // Métricas del Peluche NeuroRobi (ESP32)
@@ -79,6 +81,9 @@ export interface ClinicalSession {
   id: string;
   patientId: string;
   patientName: string;
+  specialistId?: string;
+  specialistName?: string;
+  deviceId?: string;
   date: string;
   durationSeconds: number;
   specialistRole: SpecialistRole;

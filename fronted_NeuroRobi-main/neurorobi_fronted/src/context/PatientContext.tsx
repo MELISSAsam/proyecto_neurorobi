@@ -5,6 +5,8 @@ import { useAuth } from './AuthContext';
 
 interface PatientContextType {
   patients: Patient[];
+  isLoadingRecords: boolean;
+  recordsError: string;
   activePatient: Patient | null;
   sessions: ClinicalSession[];
   activeSession: ClinicalSession | null;
@@ -13,6 +15,7 @@ interface PatientContextType {
   deletePatient: (id: string) => Promise<boolean>;
   startSession: (patientId: string) => void;
   endSession: (notes: string, durationSeconds: number, metrics: any, sensorHistory: any[], spikesLog: any[], deviceType?: 'oso' | 'oso') => void;
+  updateSessionNotes: (id: string, notes: string) => Promise<void>;
   archiveSession: (session: ClinicalSession) => Promise<void>;
   clearActiveSession: () => void;
   selectPatient: (patient: Patient | null) => void;
@@ -25,6 +28,8 @@ const API_URL = `${import.meta.env.VITE_API_URL}/api`;
 
 export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const [isLoadingRecords, setIsLoadingRecords] = useState(false);
+  const [recordsError, setRecordsError] = useState('');
   const [patients, setPatients] = useState<Patient[]>([]);
   const [sessions, setSessions] = useState<ClinicalSession[]>([]);
   const [activePatient, setActivePatient] = useState<Patient | null>(null);
@@ -32,19 +37,23 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Initialize from Backend
   useEffect(() => {
+    let cancelled = false;
     const fetchData = async () => {
+      setIsLoadingRecords(true); setRecordsError('');
       try {
         const patientsRes = await axios.get(`${API_URL}/patients`);
-        setPatients(patientsRes.data);
+        if (!cancelled) setPatients(patientsRes.data);
         
         const sessionsRes = await axios.get(`${API_URL}/sessions`);
-        setSessions(sessionsRes.data);
+        if (!cancelled) setSessions(sessionsRes.data);
       } catch (err) {
         console.error("Failed to load initial data from backend", err);
-      }
+        if (!cancelled) setRecordsError("No se pudieron cargar los registros del servidor. Comprueba la conexion y vuelve a iniciar sesion si ha caducado.");
+      } finally { if (!cancelled) setIsLoadingRecords(false); }
     };
     if (user) void fetchData();
-    else { setPatients([]); setSessions([]); }
+    else { setPatients([]); setSessions([]); setIsLoadingRecords(false); setRecordsError(''); }
+    return () => { cancelled = true; };
   }, [user]);
 
   // Register New Patient
@@ -145,7 +154,9 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
       id: `sess-${Date.now()}`,
       patientId: patient.id,
       patientName: patient.name,
-      date: new Date().toLocaleDateString(),
+      date: new Date().toISOString(),
+      specialistName: user?.name,
+      specialistId: user?.id,
       durationSeconds: 0,
       specialistRole: 'PSICOLOGIA_CLINICA', // Initial default role
       notes: '',
@@ -192,6 +203,11 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     setActiveSession(finalizedSession);
+  };
+
+  const updateSessionNotes = async (id: string, notes: string) => {
+    await axios.patch(`${API_URL}/sessions/${encodeURIComponent(id)}/notes`, { notes });
+    setSessions(previous => previous.map(session => session.id === id ? { ...session, notes } : session));
   };
 
   // Archive session in shared clinical history
@@ -250,7 +266,9 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
       id: `sess-demo-${Date.now()}`,
       patientId: patient.id,
       patientName: patient.name,
-      date: new Date().toLocaleDateString(),
+      date: new Date().toISOString(),
+      specialistName: user?.name,
+      specialistId: user?.id,
       durationSeconds: 120,
       specialistRole: 'PSICOLOGIA_CLINICA',
       notes: 'Sesión de demostración cargada automáticamente para auditoría clínica.',
@@ -278,6 +296,8 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
     <PatientContext.Provider
       value={{
         patients,
+        isLoadingRecords,
+        recordsError,
         activePatient,
         sessions,
         activeSession,
@@ -287,6 +307,7 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
         startSession,
         endSession,
         archiveSession,
+        updateSessionNotes,
         clearActiveSession,
         selectPatient,
         loadDemoSession

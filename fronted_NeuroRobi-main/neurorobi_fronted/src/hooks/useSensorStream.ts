@@ -244,6 +244,7 @@ export const useSensorStream = ({
           const lastReading = prev[prev.length - 1];
           const smoothedReading: SensorReading = {
             ...data,
+            elapsedMs: Date.now() - startedAt,
             deviceType: 'oso',
             flexIzq: sFlexIzq,
             flexDer: sFlexDer,

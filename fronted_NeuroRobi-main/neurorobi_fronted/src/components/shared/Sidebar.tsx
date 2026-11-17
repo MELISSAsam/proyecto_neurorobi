@@ -16,8 +16,8 @@ import { EditProfileForm } from '../forms/EditProfileForm';
 
 
 interface SidebarProps {
-  currentScreen: 'directory' | 'patients' | 'telemetry' | 'report';
-  setScreen: (screen: 'directory' | 'patients' | 'telemetry' | 'report') => void;
+  currentScreen: 'directory' | 'patients' | 'telemetry' | 'report' | 'history';
+  setScreen: (screen: 'directory' | 'patients' | 'telemetry' | 'report' | 'history') => void;
   isOpen?: boolean;
   onClose?: () => void;
 }
@@ -43,7 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, setScreen, isOp
 
   // Render navigation item helper
   const renderNavItem = (
-    screenId: 'directory' | 'patients' | 'telemetry' | 'report',
+    screenId: 'directory' | 'patients' | 'telemetry' | 'report' | 'history',
     label: string,
     IconComponent: React.ComponentType<any>,
     disabled: boolean,
@@ -171,6 +171,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, setScreen, isOp
         
         {renderNavItem('directory', 'Inicio y Consultas', ClipboardList, false)}
         
+        {renderNavItem('history', 'Historial de sesiones', FilePieChart, false)}
+
         {renderNavItem('patients', 'Gestión de Pacientes', Users, false)}
         
         {renderNavItem(

@@ -26,6 +26,7 @@ function mapSessionResponse(session: any) {
     durationSeconds: session.durationSeconds,
     specialistRole: session.specialistRole,
     specialistId: session.specialistId,
+    specialistName: session.specialist?.name,
     notes: session.notes,
     deviceType: normalizeDeviceType(session.deviceType),
     sensorHistory: (session.sensorHistory || []).map((reading: any) => ({
@@ -63,6 +64,7 @@ router.get('/', async (req: Request, res: Response) => {
     const sessions = await prisma.clinicalSession.findMany({
       where: patientId ? { patientId } : undefined,
       include: {
+        specialist: { select: { name: true } },
         sensorHistory: true,
         spikesLog: true
       },
@@ -86,6 +88,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     const session = await prisma.clinicalSession.findUnique({
       where: { id },
       include: {
+        specialist: { select: { name: true } },
         sensorHistory: true,
         spikesLog: true
       }
@@ -216,6 +219,7 @@ router.post('/', async (req: Request, res: Response) => {
         }
       },
       include: {
+        specialist: { select: { name: true } },
         sensorHistory: true,
         spikesLog: true
       }

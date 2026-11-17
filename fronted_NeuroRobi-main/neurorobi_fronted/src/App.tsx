@@ -10,6 +10,7 @@ import { PatientDirectory } from './pages/PatientDirectory';
 import { LiveTelemetry } from './pages/LiveTelemetry';
 import { PostSessionReport } from './pages/PostSessionReport';
 import { PatientManagement } from './pages/PatientManagement';
+import { SessionHistory } from './pages/SessionHistory';
 import { X } from 'lucide-react';
 
 interface Toast {
@@ -22,7 +23,7 @@ interface Toast {
 const AppContent: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
-  const [currentScreen, setScreen] = useState<'directory' | 'patients' | 'telemetry' | 'report'>('directory');
+  const [currentScreen, setScreen] = useState<'directory' | 'patients' | 'telemetry' | 'report' | 'history'>('directory');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -81,6 +82,8 @@ const AppContent: React.FC = () => {
           
           <div className="max-w-7xl mx-auto transition-all duration-500 ease-in-out">
             
+            {currentScreen === 'history' && <SessionHistory />}
+
             {/* Screen 1: Patient Directory */}
             {currentScreen === 'directory' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">

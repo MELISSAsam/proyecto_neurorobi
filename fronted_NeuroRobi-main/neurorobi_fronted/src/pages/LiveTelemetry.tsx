@@ -7,17 +7,7 @@ import { PsychologistDashboard } from '../components/dashboards/PsychologistDash
 import { OccupationalDashboard } from '../components/dashboards/OccupationalDashboard';
 import { NeurologistDashboard } from '../components/dashboards/NeurologistDashboard';
 
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-  ReferenceLine
-} from 'recharts';
+import { InteractionCharts } from '../components/reports/InteractionCharts';
 import {
   Wifi,
   Activity,
@@ -427,97 +417,8 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
           </div>
 
           {/* ─── Gráficos en Tiempo Real Recharts (Peluche NeuroRobi) ─── */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Activity size={16} className="text-teal-600 animate-pulse" />
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                  Dinámica de Telemetría Continua (Peluche NeuroRobi)
-                </h3>
-              </div>
-              <div className="flex items-center gap-3 text-[10px] font-bold uppercase text-slate-400">
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500"></span> Apretón ADC</span>
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-indigo-500"></span> Sacudidas</span>
-              </div>
-            </div>
+          <InteractionCharts readings={oso.streamData}/>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-              {/* Gráfico 1: Flexión y Apretón Táctil */}
-              <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-2">
-                  1. Apreton del peluche
-                </span>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={oso.streamData.slice(-100).map(r => ({ ...r, sacudida: shakeScore(r.movimiento ?? 0) }))} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorFlexIzq" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.25}/>
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis dataKey="timestamp" stroke="#94a3b8" fontSize={9} tickLine={false} />
-                      <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} />
-                      <Tooltip />
-                      <Legend verticalAlign="top" height={30} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10, fontWeight: 'bold' }} />
-                      <ReferenceLine y={600} stroke="#f43f5e" strokeDasharray="3 3" label={{ value: 'Umbral Apretón (600)', fill: '#f43f5e', fontSize: 9 }} />
-                      <Area
-                        type="monotone"
-                        name="Apretón ADC (GPIO 32)"
-                        dataKey="flexIzq"
-                        stroke="#10b981"
-                        strokeWidth={2}
-                        fillOpacity={1}
-                        fill="url(#colorFlexIzq)"
-                        isAnimationActive={false}
-                      />
-
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Gráfico 2: Cinemática e Intensidad de Sacudidas6050 */}
-              <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-2">
-                  2. Intensidad aproximada de sacudida (0 a 10)
-                </span>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={oso.streamData.slice(-100).map(r => ({ ...r, sacudida: shakeScore(r.movimiento ?? 0) }))} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorMov" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25}/>
-                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis dataKey="timestamp" stroke="#94a3b8" fontSize={9} tickLine={false} />
-                      <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} domain={[0, 10]} />
-                      <Tooltip />
-                      <Legend verticalAlign="top" height={30} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10, fontWeight: 'bold' }} />
-                      <ReferenceLine y={6} stroke="#f43f5e" strokeDasharray="3 3" />
-                      <Area
-                        type="monotone"
-                        name="Sacudida aproximada (0-10)"
-                        dataKey="sacudida"
-                        stroke="#6366f1"
-                        strokeWidth={2.5}
-                        fillOpacity={1}
-                        fill="url(#colorMov)"
-                        isAnimationActive={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* ─── Control Maestro: Finalizar Sesión Terapéutica ─── */}
           <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex flex-col justify-center items-center max-w-xl mx-auto">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
               Control de Sesión Clínica (Peluche NeuroRobi)

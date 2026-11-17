@@ -128,6 +128,7 @@ app.post('/api/telemetry', async (req: Request, res: Response) => {
 
   const dataPayload = {
     timestamp: nowStr,
+    receivedAt: new Date().toISOString(),
     deviceType,
     // Métricas del Oso NeuroRobi
     flexIzq,
