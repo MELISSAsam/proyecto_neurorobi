@@ -1,210 +1,53 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
 import { prisma } from '../shared/db';
 import { handleUpload } from '../middleware/upload';
-import { SessionClient } from '../shared/clients/SessionClient';
-
+import { authenticate, actor, patientScope, allowedPatient, auditClinical, audit, managerOnly, fail } from '../shared/security';
 const router = Router();
-const sessionClient = new SessionClient();
-
-// ──────────────────────────────────────────
-// GET /api/patients  → List all patients
-// ──────────────────────────────────────────
-router.get('/', async (_req: Request, res: Response) => {
-  try {
-    const patients = await prisma.patient.findMany({
-      orderBy: { registeredAt: 'desc' },
-      include: {
-        _count: { select: { sessions: true } }
-      }
-    });
-    res.json(patients);
-  } catch (error) {
-    console.error('[GET /patients]', error);
-    res.status(500).json({ error: 'Error al obtener pacientes' });
-  }
-});
-
-// ──────────────────────────────────────────
-// GET /api/patients/:id  → Single patient + sessions
-// ──────────────────────────────────────────
-router.get('/:id', async (req: Request, res: Response) => {
-  try {
-    const id = String(req.params['id']);
-    const patient = await prisma.patient.findUnique({
-      where: { id },
-      include: {
-        sessions: {
-          select: {
-            id: true,
-            date: true,
-            durationSeconds: true,
-            specialistRole: true,
-            notes: true
-          },
-          orderBy: { date: 'desc' }
-        }
-      }
-    });
-
-    if (!patient) {
-      res.status(404).json({ error: 'Paciente no encontrado' });
-      return;
-    }
-
-    res.json(patient);
-  } catch (error) {
-    console.error('[GET /patients/:id]', error);
-    res.status(500).json({ error: 'Error al obtener paciente' });
-  }
-});
-
-// ──────────────────────────────────────────
-// POST /api/patients  → Register new patient
-// ──────────────────────────────────────────
-router.post('/', async (req: Request, res: Response) => {
-  try {
+router.use(authenticate);
+router.get('/', async (_req, res) => { const u = actor(res); await auditClinical(u, 'patients:list'); res.json(await prisma.patient.findMany({ where: patientScope(u), include: { _count: { select: { sessions: true } } }, orderBy: { registeredAt: 'desc' } })); });
+router.get('/:id', async (req, res) => { const u = actor(res), id = String(req.params.id); await allowedPatient(u, id); await auditClinical(u, `patient:${id}`); res.json(await prisma.patient.findUnique({ where: { id }, include: { sessions: { select: { id: true, date: true, durationSeconds: true, specialistRole: true, notes: true }, orderBy: { date: 'desc' } } } })); });
+router.post('/', async (req, res) => {
+    const u = actor(res);
+    if (u.accessLevel === 'SUPERADMINISTRADOR' && !u.clinicalRead)
+        fail(403, 'Permiso clinico requerido');
     await handleUpload('profileImage')(req, res);
-
-    const { name, age, diagnosis, initialObservation } = req.body as {
-      name?: string;
-      age?: number | string;
-      diagnosis?: string;
-      initialObservation?: string;
-    };
-
-    if (!name || typeof name !== 'string' || name.trim() === '') {
-      res.status(400).json({ error: 'El nombre del paciente es requerido' });
-      return;
-    }
-    if (!age || isNaN(Number(age)) || Number(age) <= 0 || Number(age) > 120) {
-      res.status(400).json({ error: 'La edad debe ser un número válido entre 1 y 120' });
-      return;
-    }
-    if (!diagnosis || typeof diagnosis !== 'string' || diagnosis.trim() === '') {
-      res.status(400).json({ error: 'El diagnóstico es requerido' });
-      return;
-    }
-
-    const profileImageUrl = req.file ? `/uploads/${req.file.filename}` : null;
-
-    const newPatient = await prisma.patient.create({
-      data: {
-        name: name.trim(),
-        age: Number(age),
-        diagnosis: diagnosis.trim(),
-        initialObservation: initialObservation?.trim() ?? '',
-        status: 'Listo para Consulta',
-        profileImageUrl
-      }
-    });
-
-    res.status(201).json(newPatient);
-  } catch (error) {
-    console.error('[POST /patients]', error);
-    res.status(500).json({ error: 'Error al registrar paciente' });
-  }
+    const { name, age, diagnosis, initialObservation } = req.body || {};
+    if (typeof name !== 'string' || !name.trim() || typeof diagnosis !== 'string' || !diagnosis.trim() || !Number.isInteger(Number(age)) || Number(age) < 1 || Number(age) > 120)
+        fail(400, 'Completa nombre, diagnostico y edad entre 1 y 120');
+    const patient = await prisma.$transaction(async (tx) => { const p = await tx.patient.create({ data: { name: name.trim().slice(0, 150), age: Number(age), diagnosis: diagnosis.trim().slice(0, 2000), initialObservation: typeof initialObservation === 'string' ? initialObservation.slice(0, 10000) : '', institutionId: u.institutionId, profileImageUrl: req.file ? `/uploads/${req.file.filename}` : null, ...(u.accessLevel === 'TERAPEUTA' ? { assignments: { create: { specialistId: u.id } } } : {}) } }); await audit(u, 'PATIENT_CREATE', p.id, 'SUCCESS', tx); return p; });
+    res.status(201).json(patient);
 });
-
-// ──────────────────────────────────────────
-// PUT /api/patients/:id  → Update full patient data
-// ──────────────────────────────────────────
-router.put('/:id', async (req: Request, res: Response) => {
-  try {
+router.put('/:id', async (req, res) => {
+    const u = actor(res), id = String(req.params.id);
+    await allowedPatient(u, id);
     await handleUpload('profileImage')(req, res);
-
-    const id = String(req.params['id']);
-    const { name, age, diagnosis, initialObservation } = req.body as {
-      name?: string;
-      age?: number | string;
-      diagnosis?: string;
-      initialObservation?: string;
-    };
-
-    const existing = await prisma.patient.findUnique({ where: { id } });
-    if (!existing) {
-      res.status(404).json({ error: 'Paciente no encontrado' });
-      return;
+    const b = req.body || {}, data: any = {};
+    if (b.name !== undefined) {
+        if (typeof b.name !== 'string' || !b.name.trim())
+            fail(400, 'Nombre requerido');
+        data.name = b.name.trim().slice(0, 150);
     }
-
-    const profileImageUrl = req.file ? `/uploads/${req.file.filename}` : existing.profileImageUrl;
-
-    const updatedPatient = await prisma.patient.update({
-      where: { id },
-      data: {
-        ...(name ? { name: name.trim() } : {}),
-        ...(age ? { age: Number(age) } : {}),
-        ...(diagnosis ? { diagnosis: diagnosis.trim() } : {}),
-        ...(initialObservation !== undefined ? { initialObservation: initialObservation.trim() } : {}),
-        profileImageUrl
-      }
-    });
-
-    res.json(updatedPatient);
-  } catch (error) {
-    console.error('[PUT /patients/:id]', error);
-    res.status(500).json({ error: 'Error al actualizar paciente' });
-  }
+    if (b.age !== undefined) {
+        if (!Number.isInteger(Number(b.age)) || Number(b.age) < 1 || Number(b.age) > 120)
+            fail(400, 'Edad invalida');
+        data.age = Number(b.age);
+    }
+    if (b.diagnosis !== undefined) {
+        if (typeof b.diagnosis !== 'string' || !b.diagnosis.trim())
+            fail(400, 'Diagnostico requerido');
+        data.diagnosis = b.diagnosis.trim().slice(0, 2000);
+    }
+    if (b.initialObservation !== undefined) {
+        if (typeof b.initialObservation !== 'string')
+            fail(400, 'Observacion invalida');
+        data.initialObservation = b.initialObservation.slice(0, 10000);
+    }
+    if (req.file)
+        data.profileImageUrl = `/uploads/${req.file.filename}`;
+    const updated = await prisma.$transaction(async (tx) => { const p = await tx.patient.update({ where: { id }, data }); await audit(u, 'PATIENT_UPDATE', id, 'SUCCESS', tx); return p; });
+    res.json(updated);
 });
-
-// ──────────────────────────────────────────
-// PUT /api/patients/:id/status  → Update status only
-// ──────────────────────────────────────────
-router.put('/:id/status', async (req: Request, res: Response) => {
-  const VALID_STATUSES = ['Listo para Consulta', 'En Sesión', 'Sesión Completada'];
-
-  try {
-    const id = String(req.params['id']);
-    const { status } = req.body as { status?: string };
-
-    if (!status || !VALID_STATUSES.includes(status)) {
-      res.status(400).json({
-        error: `Estado inválido. Debe ser uno de: ${VALID_STATUSES.join(', ')}`
-      });
-      return;
-    }
-
-    const existing = await prisma.patient.findUnique({ where: { id } });
-    if (!existing) {
-      res.status(404).json({ error: 'Paciente no encontrado' });
-      return;
-    }
-
-    const updatedPatient = await prisma.patient.update({
-      where: { id },
-      data: { status }
-    });
-
-    res.json(updatedPatient);
-  } catch (error) {
-    console.error('[PUT /patients/:id/status]', error);
-    res.status(500).json({ error: 'Error al actualizar estado del paciente' });
-  }
-});
-
-// ──────────────────────────────────────────
-// DELETE /api/patients/:id  → Delete patient + all sessions
-// ──────────────────────────────────────────
-router.delete('/:id', async (req: Request, res: Response) => {
-  try {
-    const id = String(req.params['id']);
-
-    const existing = await prisma.patient.findUnique({ where: { id } });
-    if (!existing) {
-      res.status(404).json({ error: 'Paciente no encontrado' });
-      return;
-    }
-
-    // Using Feign Client to delete sessions from Session Service
-    // This maintains separation of concerns - Patient Service doesn't touch Session tables
-    await sessionClient.deleteByPatientId(id);
-    
-    await prisma.patient.delete({ where: { id } });
-
-    res.json({ message: 'Paciente y todas sus sesiones eliminados correctamente', id });
-  } catch (error) {
-    console.error('[DELETE /patients/:id]', error);
-    res.status(500).json({ error: 'Error al eliminar paciente' });
-  }
-});
-
+router.put('/:id/status', async (req, res) => { const u = actor(res), id = String(req.params.id); await allowedPatient(u, id); const status = req.body?.status; if (!['Listo para Consulta', 'En Sesi\u00f3n', 'Sesi\u00f3n Completada'].includes(status))
+    fail(400, 'Estado invalido'); res.json(await prisma.patient.update({ where: { id }, data: { status } })); });
+router.delete('/:id', async (req, res) => { const u = actor(res); managerOnly(u); const id = String(req.params.id); await allowedPatient(u, id); await prisma.$transaction(async (tx) => { const sessions = await tx.clinicalSession.findMany({ where: { patientId: id }, select: { id: true } }); const sessionId = { in: sessions.map(s => s.id) }; await tx.spikesLogItem.deleteMany({ where: { sessionId } }); await tx.sensorReading.deleteMany({ where: { sessionId } }); await tx.clinicalSession.deleteMany({ where: { patientId: id } }); await tx.telemetryPacket.deleteMany({ where: { patientId: id } }); await tx.patient.delete({ where: { id } }); await audit(u, 'PATIENT_DELETE', id, 'SUCCESS', tx); }); res.json({ id, message: 'Paciente eliminado' }); });
 export default router;

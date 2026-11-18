@@ -1,305 +1,71 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../shared/db';
-
-const router = Router();
-const JWT_SECRET = process.env['JWT_SECRET'] || 'neurorobi-secret-key-2026';
-if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32)) {
-  throw new Error('JWT_SECRET debe tener al menos 32 caracteres en produccion');
-}
-
-// ──────────────────────────────────────────
-// POST /api/auth/register  → Register new specialist
-// ──────────────────────────────────────────
-router.post('/register', async (req: Request, res: Response) => {
-  try {
-    const { email, password, name, role } = req.body as {
-      email?: string;
-      password?: string;
-      name?: string;
-      role?: string;
-    };
-
-    if (!email || !password || !name || !role) {
-      res.status(400).json({ error: 'Todos los campos son obligatorios' });
-      return;
-    }
-
-    const cleanEmail = email.toLowerCase().trim();
-
-    // Check if user already exists
-    const existing = await prisma.specialist.findUnique({
-      where: { email: cleanEmail }
-    });
-
-    if (existing) {
-      res.status(400).json({ error: 'El correo electrónico ya está registrado' });
-      return;
-    }
-
-    // Validate role
-    const validRoles = ['PSICOLOGIA_CLINICA', 'EDUCACION_ESPECIAL', 'FISIOTERAPIA', 'ADMIN'];
-    if (!validRoles.includes(role)) {
-      res.status(400).json({ error: 'Rol inválido especificado' });
-      return;
-    }
-
-    // Hash password
-    const hashedPassword = bcrypt.hashSync(password, 10);
-
-    const newSpecialist = await prisma.specialist.create({
-      data: {
-        email: cleanEmail,
-        password: hashedPassword,
-        name: name.trim(),
-        role: role as any
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        createdAt: true
-      }
-    });
-
-    res.status(201).json(newSpecialist);
-  } catch (error) {
-    console.error('[POST /auth/register]', error);
-    res.status(500).json({ error: 'Error al registrar especialista' });
-  }
-});
-
-// ──────────────────────────────────────────
-// POST /api/auth/login  → Authenticate & issue token
-// ──────────────────────────────────────────
-router.post('/login', async (req: Request, res: Response) => {
-  try {
-    const { email, password } = req.body as {
-      email?: string;
-      password?: string;
-    };
-
-    if (!email || !password) {
-      res.status(400).json({ error: 'Correo y contraseña son requeridos' });
-      return;
-    }
-
-    const cleanEmail = email.toLowerCase().trim();
-    const singleUser = process.env.SINGLE_USER_USERNAME?.trim().toLowerCase();
-    if (singleUser && cleanEmail !== singleUser) {
-      res.status(401).json({ error: 'Credenciales invalidas' });
-      return;
-    }
-
-
-    // Find specialist
-    const specialist = await prisma.specialist.findUnique({
-      where: { email: cleanEmail }
-    });
-
-    if (!specialist) {
-      res.status(401).json({ error: 'Credenciales inválidas' });
-      return;
-    }
-
-    // Compare passwords
-    const isPasswordValid = bcrypt.compareSync(password, specialist.password);
-    if (!isPasswordValid) {
-      res.status(401).json({ error: 'Credenciales inválidas' });
-      return;
-    }
-
-    // Generate JWT
-    const token = jwt.sign(
-      {
-        id: specialist.id,
-        email: specialist.email,
-        name: specialist.name,
-        role: specialist.role
-      },
-      JWT_SECRET,
-      { expiresIn: '30d' } // Long-lasting session for the clinical workstation
-    );
-
-    res.json({
-      token,
-      user: {
-        id: specialist.id,
-        email: specialist.email,
-        name: specialist.name,
-        role: specialist.role,
-        profileImageUrl: specialist.profileImageUrl
-      }
-    });
-  } catch (error) {
-    console.error('[POST /auth/login]', error);
-    res.status(500).json({ error: 'Error al iniciar sesión' });
-  }
-});
-
+import { authenticate, actor, audit, fail, multiUserEnabled } from '../shared/security';
 import { handleUpload } from '../middleware/upload';
-
-// ──────────────────────────────────────────
-// PUT /api/auth/profile/:id  → Update specialist profile
-// ──────────────────────────────────────────
-router.put('/profile/:id', async (req: Request, res: Response) => {
-  try {
+const router = Router();
+const secret = process.env.JWT_SECRET || 'neurorobi-secret-key-2026';
+if (process.env.NODE_ENV === 'production' && secret.length < 32)
+    throw new Error('JWT_SECRET requiere 32 caracteres');
+const safe = (u: any) => ({ id: u.id, email: u.email, name: u.name, role: u.role, accessLevel: u.accessLevel, institutionId: u.institutionId, clinicalRead: u.clinicalRead, mustChangePassword: u.mustChangePassword, profileImageUrl: u.profileImageUrl });
+const attempts = new Map<string, {
+    count: number;
+    until: number;
+}>();
+router.post('/login', async (req, res) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const password = req.body?.password, bucket = `${req.ip}:${email}`, now = Date.now();
+    if (attempts.size > 10000)
+        for (const [key, a] of attempts)
+            if (a.until < now)
+                attempts.delete(key);
+    const attempt = attempts.get(bucket);
+    if (attempt && attempt.until > now && attempt.count >= 10)
+        fail(429, 'Demasiados intentos. Espera 15 minutos');
+    attempts.set(bucket, { count: attempt && attempt.until > now ? attempt.count + 1 : 1, until: attempt && attempt.until > now ? attempt.until : now + 900000 });
+    if (!email || typeof password !== 'string' || password.length > 128)
+        fail(401, 'Credenciales invalidas');
+    const u = await prisma.specialist.findUnique({ where: { email }, include: { institution: true } });
+    const single = await multiUserEnabled() ? null : process.env.SINGLE_USER_USERNAME?.trim().toLowerCase();
+    const valid = u && await bcrypt.compare(password, u.password);
+    if (!u || !valid || !u.active || !u.institution.active || (single && email !== single) || (u.mustChangePassword && u.temporaryPasswordExpiresAt && u.temporaryPasswordExpiresAt < new Date()))
+        fail(401, 'Credenciales invalidas o acceso temporal vencido');
+    attempts.delete(bucket);
+    const settings = await prisma.platformSetting.findUnique({ where: { key: 'sessionHours' } });
+    const hours = Math.max(1, Math.min(24, Number(settings?.value) || 8));
+    const token = jwt.sign({ id: u!.id, email: u!.email, name: u!.name, role: u!.role, version: u!.sessionVersion }, secret, { expiresIn: hours * 3600 });
+    await prisma.$transaction(async (tx) => { await tx.specialist.update({ where: { id: u!.id }, data: { lastLoginAt: new Date() } }); await audit(u!, 'LOGIN', u!.id, 'SUCCESS', tx); });
+    res.json({ token, user: safe(u) });
+});
+router.use(authenticate);
+router.get('/me', (_req, res) => res.json(safe(actor(res))));
+router.post('/logout', async (_req, res) => { const u = actor(res); await prisma.$transaction(async (tx) => { await tx.specialist.update({ where: { id: u.id }, data: { sessionVersion: { increment: 1 } } }); await audit(u, 'LOGOUT', u.id, 'SUCCESS', tx); }); res.json({ ok: true }); });
+router.post('/change-password', async (req, res) => {
+    const u = actor(res), { currentPassword, password } = req.body || {};
+    if (typeof currentPassword !== 'string' || typeof password !== 'string' || password.length < 12 || password.length > 128 || currentPassword === password)
+        fail(400, 'Usa una nueva contrasena de 12 a 128 caracteres');
+    if (!await bcrypt.compare(currentPassword, u.password))
+        fail(403, 'Contrasena actual incorrecta');
+    const hashed = await bcrypt.hash(password, 12);
+    await prisma.$transaction(async (tx) => { await tx.specialist.update({ where: { id: u.id }, data: { password: hashed, mustChangePassword: false, temporaryPasswordExpiresAt: null, sessionVersion: { increment: 1 } } }); await audit(u, 'PASSWORD_CHANGE', u.id, 'SUCCESS', tx); });
+    res.json({ message: 'Contrasena actualizada. Inicia sesion nuevamente.' });
+});
+router.post('/register', (_req, _res) => fail(403, 'Utiliza Gestion de usuarios'));
+router.put('/profile/:id', async (req, res) => {
+    const u = actor(res);
+    if (String(req.params.id) !== u.id)
+        fail(403, 'Solo puedes editar tu perfil');
     await handleUpload('profileImage')(req, res);
-
-    const id = String(req.params['id']);
-    const name = req.body?.name as string | undefined;
-    const password = req.body?.password as string | undefined;
-
-    const existing = await prisma.specialist.findUnique({ where: { id } });
-    if (!existing) {
-      res.status(404).json({ error: 'Especialista no encontrado' });
-      return;
-    }
-
-    const dataToUpdate: any = {};
-    if (name && name.trim() !== '') dataToUpdate.name = name.trim();
-    if (password && password.trim() !== '') {
-      dataToUpdate.password = bcrypt.hashSync(password, 10);
-    }
-    if (req.file) {
-      dataToUpdate.profileImageUrl = `/uploads/${req.file.filename}`;
-    }
-
-    const updated = await prisma.specialist.update({
-      where: { id },
-      data: dataToUpdate,
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        profileImageUrl: true
-      }
-    });
-
-    res.json(updated);
-  } catch (error) {
-    console.error('[PUT /auth/profile]', error);
-    res.status(500).json({ error: 'Error al actualizar perfil' });
-  }
+    if (req.body?.password)
+        fail(400, 'Cambia la contrasena desde Seguridad');
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim().slice(0, 150) : u.name;
+    if (!name)
+        fail(400, 'Nombre requerido');
+    const updated = await prisma.$transaction(async (tx) => { const updated = await tx.specialist.update({ where: { id: u.id }, data: { name, ...(req.file ? { profileImageUrl: `/uploads/${req.file.filename}` } : {}) } }); await audit(u, 'PROFILE_UPDATE', u.id, 'SUCCESS', tx); return updated; });
+    res.json(safe(updated));
 });
-
-// ──────────────────────────────────────────
-// GET /api/auth/specialists  → List all specialists (for inter-service communication)
-// ──────────────────────────────────────────
-router.get('/specialists', async (_req: Request, res: Response) => {
-  try {
-    const specialists = await prisma.specialist.findMany({
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true
-      }
-    });
-    res.json(specialists);
-  } catch (error) {
-    console.error('[GET /auth/specialists]', error);
-    res.status(500).json({ error: 'Error al obtener especialistas' });
-  }
-});
-
-// ──────────────────────────────────────────
-// GET /api/auth/specialists/by-email/:email  → Find specialist by email
-// ──────────────────────────────────────────
-router.get('/specialists/by-email/:email', async (req: Request, res: Response) => {
-  try {
-    const email = String(req.params['email']).toLowerCase().trim();
-    const specialist = await prisma.specialist.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true
-      }
-    });
-
-    if (!specialist) {
-      res.status(404).json({ error: 'Especialista no encontrado' });
-      return;
-    }
-
-    res.json(specialist);
-  } catch (error) {
-    console.error('[GET /auth/specialists/by-email]', error);
-    res.status(500).json({ error: 'Error al obtener especialista' });
-  }
-});
-
-// ──────────────────────────────────────────
-// GET /api/auth/specialists/:id  → Find specialist by ID
-// ──────────────────────────────────────────
-router.get('/specialists/:id', async (req: Request, res: Response) => {
-  try {
-    const id = String(req.params['id']);
-    const specialist = await prisma.specialist.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        profileImageUrl: true,
-        createdAt: true
-      }
-    });
-
-    if (!specialist) {
-      res.status(404).json({ error: 'Especialista no encontrado' });
-      return;
-    }
-
-    res.json(specialist);
-  } catch (error) {
-    console.error('[GET /auth/specialists/:id]', error);
-    res.status(500).json({ error: 'Error al obtener especialista' });
-  }
-});
-
-// ──────────────────────────────────────────
-// Database Seeder for Default User
-// ──────────────────────────────────────────
-export async function seedInitialUser() {
-  if (process.env.NODE_ENV === 'production' || process.env.SEED_DEMO_DATA === 'false') return;
-  try {
-    const usersToSeed = [
-      { email: 'accionsocial@gmail.com', password: 'accionsocialcuenca', name: 'Acción Social Admin', role: 'ADMIN' as const },
-      { email: 'psicologia@neurorobi.com', password: 'psicologia2026', name: 'Dra. María López', role: 'PSICOLOGIA_CLINICA' as const },
-      { email: 'educacion@neurorobi.com', password: 'educacion2026', name: 'Lic. Carlos Méndez', role: 'EDUCACION_ESPECIAL' as const },
-      { email: 'fisioterapia@neurorobi.com', password: 'fisioterapia2026', name: 'Ftr. Ana Salazar', role: 'FISIOTERAPIA' as const }
-    ];
-
-    for (const user of usersToSeed) {
-      const existing = await prisma.specialist.findUnique({
-        where: { email: user.email }
-      });
-
-      if (!existing) {
-        const hashedPassword = bcrypt.hashSync(user.password, 10);
-        await prisma.specialist.create({
-          data: {
-            email: user.email,
-            password: hashedPassword,
-            name: user.name,
-            role: user.role
-          }
-        });
-        console.log(`✅ Seeded user: ${user.name} (${user.role})`);
-      } else {
-        console.log(`ℹ️  ${user.email} already exists.`);
-      }
-    }
-  } catch (error) {
-    console.error('❌ Error during user seeding:', error);
-  }
-}
-
+router.get('/specialists', async (_req, res) => { const u = actor(res); if (u.accessLevel === 'TERAPEUTA')
+    fail(403, 'No autorizado'); const items = await prisma.specialist.findMany({ where: u.accessLevel === 'SUPERADMINISTRADOR' ? {} : { institutionId: u.institutionId }, select: { id: true, name: true, role: true } }); res.json(items); });
+export async function seedInitialUser() { }
 export default router;

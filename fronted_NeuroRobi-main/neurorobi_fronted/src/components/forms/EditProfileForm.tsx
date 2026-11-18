@@ -1,9 +1,9 @@
+import { ProtectedImage } from '../shared/ProtectedImage';
 import React, { useState, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
-  Save, Undo, ShieldAlert, X, Camera, User, Lock, Check,
-  Eye, EyeOff
+  Save, Undo, ShieldAlert, X, Camera, User, Check
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -17,8 +17,6 @@ export const EditProfileForm: React.FC<EditProfileFormProps> = ({ onClose, onSuc
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(user?.name || '');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(
     user?.profileImageUrl ? `${import.meta.env.VITE_API_URL}${user.profileImageUrl}` : null
@@ -46,9 +44,6 @@ export const EditProfileForm: React.FC<EditProfileFormProps> = ({ onClose, onSuc
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     if (!name.trim()) newErrors.name = 'El nombre es requerido.';
-    if (password && password.length < 6) {
-      newErrors.password = 'La contraseña debe tener al menos 6 caracteres.';
-    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -65,7 +60,6 @@ export const EditProfileForm: React.FC<EditProfileFormProps> = ({ onClose, onSuc
     try {
       const formData = new FormData();
       formData.append('name', name.trim());
-      if (password) formData.append('password', password);
       if (profileImage) formData.append('profileImage', profileImage);
 
       const res = await axios.put(
@@ -150,7 +144,7 @@ export const EditProfileForm: React.FC<EditProfileFormProps> = ({ onClose, onSuc
                     : 'border-dashed border-slate-300 bg-white'
                 }`}>
                   {previewUrl ? (
-                    <img src={previewUrl} alt="Perfil" className="h-full w-full object-cover" />
+                    <ProtectedImage src={previewUrl} alt="Perfil" className="h-full w-full object-cover" />
                   ) : (
                     <User size={36} className="text-slate-300" />
                   )}
@@ -222,41 +216,7 @@ export const EditProfileForm: React.FC<EditProfileFormProps> = ({ onClose, onSuc
               )}
             </div>
 
-            {/* ── Nueva Contraseña ── */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
-                Nueva Contraseña{' '}
-                <span className="text-slate-400 normal-case font-normal">(dejar vacío para no cambiar)</span>
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                  <Lock size={14} />
-                </span>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Mínimo 6 caracteres"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={`w-full pl-9 pr-10 py-2.5 text-sm bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 transition-all ${
-                    errors.password
-                      ? 'border-rose-300 focus:ring-rose-400'
-                      : 'border-slate-200 focus:ring-teal-500 focus:border-teal-400'
-                  }`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                >
-                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-              </div>
-              {errors.password && (
-                <p className="text-[10px] text-rose-500 font-semibold mt-1 flex items-center gap-1">
-                  <ShieldAlert size={10} /> {errors.password}
-                </p>
-              )}
-            </div>
+            <p className="text-xs text-slate-500">Para cambiar tu contrasena, abre Seguridad de mi cuenta en el menu lateral.</p>
 
             {/* ── Botones ── */}
             <div className="flex gap-3 pt-1">

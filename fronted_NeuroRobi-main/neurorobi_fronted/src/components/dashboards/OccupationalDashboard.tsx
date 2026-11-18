@@ -53,7 +53,7 @@ export const OccupationalDashboard: React.FC<OccupationalDashboardProps> = ({
             </div>
             
             <div className="bg-emerald-50/40 border border-emerald-100/50 rounded-xl p-3.5 flex flex-col justify-center">
-              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide">Finales de Carrera</span>
+              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide">Pulsaciones de brazos</span>
               <div className="flex items-center gap-2 mt-1">
                 <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${switchIzq ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
                   Izq: {switchIzq ? 'ON' : 'OFF'}

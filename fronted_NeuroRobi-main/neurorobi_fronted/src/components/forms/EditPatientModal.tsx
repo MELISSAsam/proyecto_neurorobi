@@ -1,3 +1,4 @@
+import { ProtectedImage } from '../shared/ProtectedImage';
 import React, { useState, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { usePatients } from '../../context/PatientContext';
@@ -110,7 +111,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-50">
           <div className="flex items-center gap-3">
             {previewUrl ? (
-              <img src={previewUrl} alt={editName} className="h-9 w-9 rounded-xl object-cover border border-slate-100 shadow-xs" />
+              <ProtectedImage src={previewUrl} alt={editName} className="h-9 w-9 rounded-xl object-cover border border-slate-100 shadow-xs" />
             ) : (
               <div className="h-9 w-9 rounded-xl bg-teal-50 flex items-center justify-center text-teal-600">
                 <User size={18} />
@@ -149,7 +150,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
                   previewUrl ? 'border-teal-400 shadow-lg shadow-teal-100' : 'border-dashed border-slate-300 bg-white'
                 }`}>
                   {previewUrl ? (
-                    <img src={previewUrl} alt="Preview" className="h-full w-full object-cover" />
+                    <ProtectedImage src={previewUrl} alt="Preview" className="h-full w-full object-cover" />
                   ) : (
                     <User size={30} className="text-slate-300" />
                   )}

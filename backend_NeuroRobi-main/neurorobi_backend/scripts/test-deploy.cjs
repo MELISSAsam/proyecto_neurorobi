@@ -10,7 +10,7 @@ const env = { ...process.env, NODE_ENV: 'production', SEED_DEMO_DATA: 'false',
   DATABASE_URL: `file:${path.join(data, 'test.db').replaceAll('\\', '/')}`,
   UPLOADS_DIR: path.join(data, 'uploads'), JWT_SECRET: 'isolated-test-secret-with-at-least-32-characters',
   INITIAL_ADMIN_EMAIL: 'deploy@example.test', INITIAL_ADMIN_PASSWORD: 'isolated-password-123',
-  SINGLE_USER_USERNAME: 'melissa', SINGLE_USER_PASSWORD: 'isolated-test-password',
+  MULTI_USER_ENABLED: 'false', SUPERADMIN_EMAIL:'', SUPERADMIN_PASSWORD:'', LEGACY_DEVICE_ID:'oso-principal', SINGLE_USER_USERNAME: 'melissa', SINGLE_USER_PASSWORD: 'isolated-test-password',
   TELEMETRY_API_KEY: 'isolated-device-key', THERAPY_LEASE_MS: '1000', PORT: '43101', REGISTRY_PORT: '43100',
   AUTH_PORT: '43102', PATIENT_PORT: '43103', SESSION_PORT: '43104', TELEMETRY_PORT: '43105',
   REGISTRY_URL: 'http://127.0.0.1:43100', SERVICE_HOSTNAME: '127.0.0.1',
@@ -44,14 +44,16 @@ async function main() {
   assert.ok(ready, 'Services did not become ready');
   await request('/api/patients', {}, 401);
   await request('/api/telemetry', { method: 'POST' }, 401);
-  const login = await request('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+  let login = await request('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: env.SINGLE_USER_USERNAME, password: env.SINGLE_USER_PASSWORD }) });
   await request('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: env.INITIAL_ADMIN_EMAIL, password: env.INITIAL_ADMIN_PASSWORD }) }, 401);
   await request('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: env.SINGLE_USER_USERNAME, password: 'wrong-password' }) }, 401);
+  await request(`/api/admin/users/${login.user.id}`,{method:'PATCH',headers:{Authorization:`Bearer ${login.token}`,'Content-Type':'application/json'},body:JSON.stringify({clinicalRead:true})});
+  login=await request('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:env.SINGLE_USER_USERNAME,password:env.SINGLE_USER_PASSWORD})});
   const headers = { Authorization: `Bearer ${login.token}`, 'Content-Type': 'application/json' };
-  const staffToken = require('jsonwebtoken').sign({ id: login.user.id, email: env.SINGLE_USER_USERNAME, role: 'FISIOTERAPIA' }, env.JWT_SECRET);
+  const staffToken = require('jsonwebtoken').sign({ id: login.user.id, email: env.SINGLE_USER_USERNAME, role: 'FISIOTERAPIA',version:require('jsonwebtoken').decode(login.token).version }, env.JWT_SECRET);
   for (const route of ['/api/auth/register', '/api/AUTH/REGISTER']) {
     await request(route, { method: 'POST', headers: { Authorization: `Bearer ${staffToken}` } }, 403);
   }
@@ -61,7 +63,7 @@ async function main() {
   profile.set('name', 'Multipart Admin');
   profile.set('profileImage', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jS1cAAAAASUVORK5CYII=', 'base64')], { type: 'image/png' }), 'test.png');
   const updated = await request(`/api/auth/profile/${login.user.id}`, { method: 'PUT', headers: { Authorization: headers.Authorization }, body: profile });
-  assert.ok((await fetch(base + updated.profileImageUrl)).ok);
+  assert.equal((await fetch(base + updated.profileImageUrl)).status,404);assert.ok((await fetch(base + '/api/media/' + updated.profileImageUrl.split('/').pop(),{headers:{Authorization:headers.Authorization}})).ok);
   await request('/api/auth/profile/other-user', { method: 'PUT', headers, body: '{}' }, 403);
   const patient = await request('/api/patients', { method: 'POST', headers, body: JSON.stringify({ name: 'Smoke Patient', age: 8, diagnosis: 'TEA', initialObservation: 'Test' }) }, 201);
   assert.ok(patient.id);
@@ -141,7 +143,7 @@ async function main() {
   assert.ok(recovered);
   assert.equal((await request(`/api/patients/${patient.id}`, { headers })).id, patient.id);
   assert.equal((await request(`/api/sessions/${session.id}`, { headers })).notes, 'Smoke session');
-  assert.ok((await fetch(base + updated.profileImageUrl)).ok);
+  assert.equal((await fetch(base + updated.profileImageUrl)).status,404);assert.ok((await fetch(base + '/api/media/' + updated.profileImageUrl.split('/').pop(),{headers:{Authorization:headers.Authorization}})).ok);
   console.log('PASS: migrations, bootstrap, login, authorization, JSON/multipart profile, uploads, patients, session save/read, stats, device key, Socket.IO websocket/polling, rejected anonymous socket, readiness 503, proxy 502, restart persistence.');
   console.log(`Isolated test artifacts: ${data}`);
 }

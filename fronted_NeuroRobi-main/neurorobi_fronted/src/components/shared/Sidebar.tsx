@@ -1,3 +1,6 @@
+import type { Screen } from '../../types';
+import { adminSections } from '../../pages/AdminConsole';
+import { ProtectedImage } from './ProtectedImage';
 import React from 'react';
 import { Logo } from '../brand/Logo';
 import { usePatients } from '../../context/PatientContext';
@@ -16,8 +19,8 @@ import { EditProfileForm } from '../forms/EditProfileForm';
 
 
 interface SidebarProps {
-  currentScreen: 'directory' | 'patients' | 'telemetry' | 'report' | 'history';
-  setScreen: (screen: 'directory' | 'patients' | 'telemetry' | 'report' | 'history') => void;
+  currentScreen: Screen;
+  setScreen: (screen: Screen) => void;
   isOpen?: boolean;
   onClose?: () => void;
 }
@@ -39,11 +42,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, setScreen, isOp
     return role;
   };
 
-  const roleLabel = getRoleDisplayName(activeRole);
+  const roleLabel = user?.accessLevel==='SUPERADMINISTRADOR'?'Superadministrador':user?.accessLevel==='ADMINISTRADOR'?'Administrador':getRoleDisplayName(activeRole);
 
   // Render navigation item helper
   const renderNavItem = (
-    screenId: 'directory' | 'patients' | 'telemetry' | 'report' | 'history',
+    screenId: Screen,
     label: string,
     IconComponent: React.ComponentType<any>,
     disabled: boolean,
@@ -134,7 +137,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, setScreen, isOp
         <div className="flex items-center gap-3">
           <div className="relative shrink-0">
             {user?.profileImageUrl ? (
-              <img 
+              <ProtectedImage
                 src={`${import.meta.env.VITE_API_URL}${user.profileImageUrl}`} 
                 alt={userName || 'Especialista'} 
                 className="h-11 w-11 rounded-xl object-cover shadow-md border-2 border-white" 
@@ -169,6 +172,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, setScreen, isOp
           Módulos Principales
         </span>
         
+        {user?.accessLevel!=='TERAPEUTA' && <div className="mb-5">{adminSections.filter(s=>user?.accessLevel==='SUPERADMINISTRADOR'||!['audit','settings'].includes(s.id)).map(s=>renderNavItem(`admin-${s.id}`,s.label,s.id==='users'?Users:s.id==='dashboard'?Activity:Settings,false))}</div>}
+        {(user?.accessLevel!=='SUPERADMINISTRADOR'||user?.clinicalRead) && <>
         {renderNavItem('directory', 'Inicio y Consultas', ClipboardList, false)}
         
         {renderNavItem('history', 'Historial de sesiones', FilePieChart, false)}
@@ -188,6 +193,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, setScreen, isOp
           FilePieChart, 
           false
         )}
+        </>}
+        {renderNavItem('security','Seguridad de mi cuenta',Settings,false)}
       </nav>
 
       {/* Connected ESP32 Status Quick Widget */}

@@ -1,3 +1,4 @@
+export type Screen = 'directory' | 'patients' | 'telemetry' | 'report' | 'history' | 'security' | `admin-${import('../pages/AdminConsole').AdminSection}`;
 // Absolute TypeScript safety interfaces for Neurorobi IoT clinical platform
 
 export type SpecialistRole = 'PSICOLOGIA_CLINICA' | 'EDUCACION_ESPECIAL' | 'FISIOTERAPIA' | 'ADMIN';
@@ -21,6 +22,7 @@ export interface Patient {
 }
 
 export interface SensorReading {
+  deviceId?: string;
   receivedAt?: string;
   elapsedMs?: number;
   timestamp: string; // HH:MM:SS

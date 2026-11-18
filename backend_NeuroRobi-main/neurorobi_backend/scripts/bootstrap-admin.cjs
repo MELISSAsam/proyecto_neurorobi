@@ -1,54 +1,44 @@
 require('dotenv').config();
-const bcrypt = require('bcryptjs');
-const { PrismaClient } = require('@prisma/client');
-const { PrismaBetterSqlite3 } = require('@prisma/adapter-better-sqlite3');
+const bcrypt=require('bcryptjs'),{createHash}=require('crypto');
+const {PrismaClient}=require('@prisma/client'),{PrismaBetterSqlite3}=require('@prisma/adapter-better-sqlite3');
+async function main(){
+ const prisma=new PrismaClient({adapter:new PrismaBetterSqlite3({url:process.env.DATABASE_URL?.startsWith('file:')?process.env.DATABASE_URL:'file:./dev.db'})});
+ const institutionId='neurorobi-default';
+ const log=(action,resource)=>prisma.auditLog.create({data:{actorName:'Configuracion de arranque',institutionId,action,resource,result:'SUCCESS'}});
+ try{
+ await prisma.institution.upsert({where:{id:institutionId},create:{id:institutionId,name:'NeuroRobi - Institucion inicial'},update:{}});
+ const single=process.env.SINGLE_USER_USERNAME?.trim().toLowerCase();
+ if(single){
+  const existing=await prisma.specialist.findUnique({where:{email:single}}),password=process.env.SINGLE_USER_PASSWORD;
+  if(!existing){if(!password||password.length<8)throw new Error('Configura SINGLE_USER_PASSWORD');await prisma.specialist.create({data:{email:single,password:await bcrypt.hash(password,12),name:'Administrador',role:'ADMIN',accessLevel:'ADMINISTRADOR',institutionId}});}
 
-async function main() {
-  const dbUrl = (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('file:'))
-    ? process.env.DATABASE_URL
-    : 'file:./dev.db';
-  const username = process.env.SINGLE_USER_USERNAME?.trim().toLowerCase();
-  if (username) {
-    const password = process.env.SINGLE_USER_PASSWORD;
-    if (!password || password.length < 8) throw new Error('SINGLE_USER_PASSWORD requiere al menos 8 caracteres');
-    const prisma = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: dbUrl }) });
-    try {
-      const existing = await prisma.specialist.findUnique({ where: { email: username } });
-      const matches = existing && await bcrypt.compare(password, existing.password);
-      await prisma.specialist.upsert({
-        where: { email: username },
-        create: { email: username, password: await bcrypt.hash(password, 12), name: 'Melissa', role: 'ADMIN' },
-        update: { role: 'ADMIN', ...(!matches ? { password: await bcrypt.hash(password, 12) } : {}) }
-      });
-      console.log('Cuenta de acceso unico preparada.');
-    } finally { await prisma.$disconnect(); }
-    return;
+ }
+ const initial=process.env.INITIAL_ADMIN_EMAIL?.trim().toLowerCase();
+ if(initial&&!await prisma.specialist.findUnique({where:{email:initial}})){
+  const password=process.env.INITIAL_ADMIN_PASSWORD;if(!initial.includes('@')||!password||password.length<12)throw new Error('Credenciales iniciales invalidas');
+  await prisma.specialist.create({data:{email:initial,password:await bcrypt.hash(password,12),name:'Administrador',role:'ADMIN',accessLevel:'ADMINISTRADOR',institutionId}});
+ }
+ const superEmail=process.env.SUPERADMIN_EMAIL?.trim().toLowerCase()||single;
+ if(superEmail&&!await prisma.platformSetting.findUnique({where:{key:'superadminBootstrapped'}})){
+  if(single&&process.env.MULTI_USER_ENABLED!=='true'&&superEmail!==single)throw new Error('Activa MULTI_USER_ENABLED para habilitar varias cuentas');
+  const existing=await prisma.specialist.findUnique({where:{email:superEmail}});
+  if(existing){await prisma.specialist.update({where:{id:existing.id},data:{accessLevel:'SUPERADMINISTRADOR',role:'ADMIN',active:true,clinicalRead:false,sessionVersion:{increment:1}}});}
+  else{const password=process.env.SUPERADMIN_PASSWORD;if(!superEmail.includes('@')||!password||password.length<12)throw new Error('Configura SUPERADMIN_EMAIL y SUPERADMIN_PASSWORD (minimo 12 caracteres)');await prisma.specialist.create({data:{email:superEmail,password:await bcrypt.hash(password,12),name:'Superadministrador',role:'ADMIN',accessLevel:'SUPERADMINISTRADOR',institutionId}});}
+  await prisma.platformSetting.create({data:{key:'superadminBootstrapped',value:'true'}});await log('SUPERADMIN_BOOTSTRAP',superEmail);
+ }
+ if(process.env.TELEMETRY_API_KEY){
+  const id=process.env.LEGACY_DEVICE_ID||'oso-principal';
+  await prisma.neuroDevice.upsert({where:{id},create:{id,name:'Oso NeuroRobi principal',institutionId,keyHash:createHash('sha256').update(process.env.TELEMETRY_API_KEY).digest('hex')},update:{}});
+ }
+ if(!await prisma.platformSetting.findUnique({where:{key:'interactionCountsBackfilled'}})){
+  const {analyze}=require('../dist/shared/interactions.js');
+  let cursor;
+  for(;;){const batch=await prisma.clinicalSession.findMany({take:100,orderBy:{id:'asc'},...(cursor?{cursor:{id:cursor},skip:1}:{}),include:{sensorHistory:{orderBy:{id:'asc'}}}});if(!batch.length)break;
+   for(const s of batch){const readings=s.sensorHistory.map(r=>{try{return {...r,...JSON.parse(r.payload||'{}')};}catch{return r;}});const c=analyze(readings);await prisma.clinicalSession.update({where:{id:s.id},data:{pulses:c.contacts||0,squeezes:c.squeezes||0,shakes:c.shakes||0}});}cursor=batch[batch.length-1].id;
   }
-  const email = process.env.INITIAL_ADMIN_EMAIL?.trim().toLowerCase();
-  const password = process.env.INITIAL_ADMIN_PASSWORD;
-  if (!email && !password) return;
-  if (!email?.includes('@') || !password || password.length < 12) {
-    throw new Error('Configura INITIAL_ADMIN_EMAIL y INITIAL_ADMIN_PASSWORD (minimo 12 caracteres).');
-  }
-  const prisma = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: dbUrl }) });
-  try {
-    const existing = await prisma.specialist.findUnique({ where: { email } });
-    if (existing) {
-      console.log('El usuario inicial ya existe; se conservan sus credenciales.');
-      return;
-    }
-    await prisma.specialist.create({ data: {
-      email,
-      password: await bcrypt.hash(password, 12),
-      name: 'Administrador',
-      role: 'ADMIN',
-    } });
-    console.log('Administrador inicial creado. Elimina INITIAL_ADMIN_EMAIL e INITIAL_ADMIN_PASSWORD de Railway.');
-  } finally {
-    await prisma.$disconnect();
-  }
+  await prisma.platformSetting.create({data:{key:'interactionCountsBackfilled',value:'true'}});
+ }
+ console.log('Configuracion administrativa preparada; se conservaron usuarios, credenciales e historial.');
+ }finally{await prisma.$disconnect();}
 }
-main().catch(() => {
-  console.error('No se pudo preparar el administrador. Revisa las variables iniciales y la conexion a la base de datos.');
-  process.exitCode = 1;
-});
+main().catch(e=>{console.error('Error de configuracion:',e.message);process.exitCode=1;});

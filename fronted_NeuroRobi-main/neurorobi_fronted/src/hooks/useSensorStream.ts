@@ -7,6 +7,7 @@ interface UseSensorStreamProps {
   isStreaming: boolean;
   onSpikeTriggered?: (spike: SpikesLogItem) => void;
   patientId?: string;
+  deviceId?: string;
   deviceType?: 'oso';
   simulate?: boolean;
   directEsp32Ip?: string | null; // e.g. '192.168.4.1' para lectura directa WiFi
@@ -16,6 +17,7 @@ export const useSensorStream = ({
   isStreaming,
   onSpikeTriggered,
   patientId,
+  deviceId,
   deviceType = 'oso',
   simulate = false,
   directEsp32Ip = null
@@ -183,7 +185,7 @@ export const useSensorStream = ({
 
       newSocket.on('connect', () => {
         setSocketConnected(true);
-        newSocket.emit('start-stream', { patientId, deviceType: 'oso' });
+        newSocket.emit('start-stream', { patientId, deviceId, deviceType: 'oso' });
       });
 
       newSocket.on('disconnect', () => {
@@ -295,10 +297,10 @@ export const useSensorStream = ({
         setIsDeviceConnected(true);
       };
 
-      newSocket.on('sensor-data', (data: SensorReading) => handleSensorData(data));
+      newSocket.on('sensor-data', (data: SensorReading) => {if(!deviceId||data.deviceId===deviceId)handleSensorData(data);});
 
-      newSocket.on('device-status', ({ deviceType: statusDeviceType, connected }: { deviceType: string; connected: boolean }) => {
-        if (statusDeviceType === 'oso') {
+      newSocket.on('device-status', ({ deviceType: statusDeviceType, deviceId:statusId, connected }: { deviceType: string; deviceId?:string; connected: boolean }) => {
+        if (statusDeviceType === 'oso' && (!deviceId||deviceId===statusId)) {
           setIsDeviceConnected(connected);
           if (!connected) {
             setIsFsrConnected(false);
@@ -417,7 +419,7 @@ export const useSensorStream = ({
         setSocket(null);
       }
     }
-  }, [isStreaming, patientId, resetStream, simulate, directEsp32Ip, generateSimulatedPacket, renderTimestamp]);
+  }, [isStreaming, patientId, deviceId, resetStream, simulate, directEsp32Ip, generateSimulatedPacket, renderTimestamp]);
 
   return {
     streamData,

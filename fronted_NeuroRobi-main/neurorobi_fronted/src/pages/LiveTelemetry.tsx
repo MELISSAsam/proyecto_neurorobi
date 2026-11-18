@@ -33,12 +33,14 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
   const { activeRole } = useRole();
 
   const [isStreaming, setIsStreaming] = useState(false);
-  const availability = useDeviceAvailability();
+  const [selectedDeviceId,setSelectedDeviceId]=useState('');
+  const availability = useDeviceAvailability(selectedDeviceId);
+  const currentDeviceId=availability.deviceId;
   const controllerId = useRef(crypto.randomUUID());
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [starting, setStarting] = useState(false);
   const [controlError, setControlError] = useState('');
-  const control = (action: string, patientId?: string) => axios.post(`${import.meta.env.VITE_API_URL}/api/telemetry/control`, { action, patientId, controllerId: controllerId.current }, { timeout: 5000 });
+  const control = (action: string, patientId?: string) => axios.post(`${import.meta.env.VITE_API_URL}/api/telemetry/control`, { action, patientId, deviceId:currentDeviceId, controllerId: controllerId.current }, { timeout: 5000 });
   useEffect(() => {
     if (!isStreaming) return;
     let pending = false;
@@ -63,6 +65,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
     isStreaming,
     onSpikeTriggered: handleSpikeTriggered,
     patientId: activePatient?.id,
+    deviceId:currentDeviceId,
     deviceType: 'oso',
     simulate: false,
     directEsp32Ip: null
@@ -83,7 +86,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
     movimiento: oso.movimiento
   };
 
-  const interactions = analyze(oso.streamData);
+  const interactions = React.useMemo(()=>analyze(oso.streamData),[oso.streamData]);
   const currentFlexIzq = latestReading.flexIzq ?? oso.flexIzq ?? 0;
   const currentApreton = Boolean(latestReading.apreton ?? oso.apreton);
   const currentSwIzq = Boolean(latestReading.switchIzq ?? oso.switch1Pressed);
@@ -124,11 +127,11 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
       minHeartRate: 0,
       avgHugForce: avgHug,
       maxHugForce: maxHug,
-      comfortIndex: currentApreton ? 90 : 65,
+      comfortIndex: 0,
       bilateralSync: oso.bilateralTouchSync,
       motorFatigueScore: Object.values(fatigueCheckmarks).filter(Boolean).length * 25,
       stereotypicalCount: oso.stereotypicalTicks,
-      calmStatePercentage: Math.max(0, Math.min(100, Math.round(100 - currentMovimiento))),
+      calmStatePercentage: 0,
       spikesCount: oso.spikesLog.length
     };
 
@@ -155,6 +158,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
       <p className="text-xs text-slate-400">{availability.serverConnected ? 'Servidor conectado' : 'Conectando con el servidor...'}</p>
       {controlError && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">{controlError}</p>}
       {hasRecords ? <button onClick={handleEndSession} className="rounded-xl bg-teal-600 px-5 py-3 text-sm font-bold text-white">Finalizar y guardar registros disponibles</button> : <>
+        <select aria-label="Oso para terapia" value={selectedDeviceId||currentDeviceId||''} onChange={e=>setSelectedDeviceId(e.target.value)} className="w-full rounded-xl border border-slate-200 p-3 text-sm text-slate-700"><option value="">Selecciona un oso</option>{availability.devices.map(d=><option key={d.deviceId} value={d.deviceId}>{d.name} - {d.connected?'Conectado':'Desconectado'}{d.therapyActive?' (En terapia)':''}</option>)}</select>
         <select aria-label="Paciente para terapia" value={patientId} onChange={e=>setSelectedPatientId(e.target.value)} className="w-full rounded-xl border border-slate-200 p-3 text-sm text-slate-700"><option value="">Selecciona un paciente</option>{patients.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
         <button disabled={!availability.connected || availability.inUse || !patientId || starting || pendingReport} onClick={async()=>{
           setStarting(true);setControlError('');
@@ -379,6 +383,7 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
             {activeRole === 'PSICOLOGIA_CLINICA' && (
               <PsychologistDashboard
                 currentHugForce={currentApreton ? 100 : 0}
+                squeezeCount={interactions.squeezes??0}
                 avgHugForce={oso.avgHugForce}
                 onAddTrigger={(trigger) => setTriggers(prev => [...prev, trigger])}
                 triggers={triggers}

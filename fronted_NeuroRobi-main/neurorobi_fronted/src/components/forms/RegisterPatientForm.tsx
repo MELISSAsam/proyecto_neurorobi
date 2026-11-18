@@ -1,3 +1,4 @@
+import { ProtectedImage } from '../shared/ProtectedImage';
 import React, { useState, useRef } from 'react';
 import { usePatients } from '../../context/PatientContext';
 import type { Patient } from '../../types';
@@ -136,7 +137,7 @@ export const RegisterPatientForm: React.FC<RegisterPatientFormProps> = ({ onSucc
               previewUrl ? 'border-teal-400 shadow-lg shadow-teal-100' : 'border-dashed border-slate-200 bg-slate-50'
             }`}>
               {previewUrl ? (
-                <img src={previewUrl} alt="Preview" className="h-full w-full object-cover" />
+                <ProtectedImage src={previewUrl} alt="Preview" className="h-full w-full object-cover" />
               ) : (
                 <User size={36} className="text-slate-300" />
               )}

@@ -1,4 +1,8 @@
-import React, { useState } from 'react';
+import type { Screen } from './types';
+import { AdminConsole } from './pages/AdminConsole';
+import type { AdminSection } from './pages/AdminConsole';
+import { PasswordChange } from './components/shared/PasswordChange';
+import React, { useState,useEffect } from 'react';
 import { PatientProvider } from './context/PatientContext';
 import { RoleProvider } from './context/RoleContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -21,11 +25,13 @@ interface Toast {
 
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated,user,loading } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
-  const [currentScreen, setScreen] = useState<'directory' | 'patients' | 'telemetry' | 'report' | 'history'>('directory');
+  const [currentScreen, setScreen] = useState<Screen>('directory');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  useEffect(()=>{setScreen(user?.accessLevel && user.accessLevel!=='TERAPEUTA'?'admin-dashboard':'directory');},[user?.id,user?.accessLevel]);
 
   // Show customized floating toast alerts
   const showToast = (message: string, type: 'success' | 'warning' | 'info' = 'success') => {
@@ -47,6 +53,9 @@ const AppContent: React.FC = () => {
   if (showSplash) {
     return <Splash onComplete={() => setShowSplash(false)} />;
   }
+
+  if(loading)return <div className="p-12 text-center text-sm text-slate-500">Verificando acceso...</div>;
+  if(user?.mustChangePassword)return <PasswordChange/>;
 
   if (!isAuthenticated) {
     return <Login onSuccess={() => showToast('¡Bienvenido al panel Neurorobi!', 'success')} />;
@@ -75,13 +84,15 @@ const AppContent: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         
         {/* Top Header Controls bar */}
-        <TopBar onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
+        <TopBar isAdministrative={currentScreen.startsWith('admin-')} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
 
         {/* Dynamic Screen Viewport Area */}
         <main className="flex-1 overflow-y-auto p-3.5 sm:p-6 md:p-8 relative">
           
           <div className="max-w-7xl mx-auto transition-all duration-500 ease-in-out">
             
+            {currentScreen === 'security' && <PasswordChange/>}
+            {currentScreen.startsWith('admin-') && user?.accessLevel!=='TERAPEUTA' && <AdminConsole key={currentScreen} section={currentScreen.slice(6) as AdminSection}/>}
             {currentScreen === 'history' && <SessionHistory />}
 
             {/* Screen 1: Patient Directory */}

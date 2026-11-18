@@ -1,3 +1,4 @@
+import { ProtectedImage } from '../components/shared/ProtectedImage';
 import React, { useState } from 'react';
 import { formatRegistrationDate } from '../utils/date';
 import { usePatients } from '../context/PatientContext';
@@ -181,7 +182,7 @@ export const PatientManagement: React.FC<PatientManagementProps> = ({
                         isSelected ? 'bg-teal-100 text-teal-700' : 'bg-slate-50 text-slate-500'
                       }`}>
                         {p.profileImageUrl ? (
-                          <img src={`${import.meta.env.VITE_API_URL}${p.profileImageUrl}`} alt={p.name} className="h-full w-full object-cover" />
+                          <ProtectedImage src={`${import.meta.env.VITE_API_URL}${p.profileImageUrl}`} alt={p.name} className="h-full w-full object-cover" />
                         ) : (
                           <User size={15} />
                         )}
@@ -208,7 +209,7 @@ export const PatientManagement: React.FC<PatientManagementProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-50 pb-5">
                 <div className="flex items-center gap-4">
                   {selectedPatient.profileImageUrl ? (
-                    <img 
+                    <ProtectedImage
                       src={`${import.meta.env.VITE_API_URL}${selectedPatient.profileImageUrl}`} 
                       alt={`Foto de ${selectedPatient.name}`}
                       className="h-12 w-12 rounded-xl object-cover shadow-xs border border-slate-100"

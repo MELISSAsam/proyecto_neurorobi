@@ -6,6 +6,23 @@ datasource db {
   provider = "sqlite"
 }
 
+model Institution {
+  id String @id @default(uuid())
+  name String
+  contact String @default("")
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  users Specialist[]
+  patients Patient[]
+  devices NeuroDevice[]
+}
+
+enum AccessLevel {
+  SUPERADMINISTRADOR
+  ADMINISTRADOR
+  TERAPEUTA
+}
+
 model Patient {
   id                 String            @id @default(uuid())
   name               String
@@ -14,8 +31,12 @@ model Patient {
   status             String            @default("Listo para Consulta")
   initialObservation String
   profileImageUrl    String?
+  institutionId String @default("neurorobi-default")
+  institution Institution @relation(fields: [institutionId], references: [id])
+  assignments PatientAssignment[]
   registeredAt       DateTime          @default(now())
   sessions           ClinicalSession[]
+  @@index([institutionId])
 }
 
 enum DeviceType {
@@ -32,6 +53,11 @@ model ClinicalSession {
   notes               String
   deviceType          DeviceType      @default(OSO)
 
+  deviceId String?
+  device NeuroDevice? @relation(fields: [deviceId], references: [id])
+  pulses Int @default(0)
+  squeezes Int @default(0)
+  shakes Int @default(0)
   // Metrics (flattened)
   avgHeartRate        Float           @default(0)
   maxHeartRate        Float           @default(0)
@@ -51,6 +77,7 @@ model ClinicalSession {
   specialist          Specialist      @relation(fields: [specialistId], references: [id])
   sensorHistory       SensorReading[]
   spikesLog           SpikesLogItem[]
+  @@index([patientId, date])
 }
 
 model SensorReading {
@@ -66,6 +93,7 @@ model SensorReading {
   heartRate   Float
 
   session     ClinicalSession @relation(fields: [sessionId], references: [id])
+  @@index([sessionId])
 }
 
 model SpikesLogItem {
@@ -79,6 +107,7 @@ model SpikesLogItem {
   severity    String
 
   session     ClinicalSession @relation(fields: [sessionId], references: [id])
+  @@index([sessionId])
 }
 
 enum Role {
@@ -96,12 +125,73 @@ model Specialist {
   role            Role
   profileImageUrl String?
   sessions        ClinicalSession[]
+  accessLevel AccessLevel @default(TERAPEUTA)
+  institutionId String @default("neurorobi-default")
+  institution Institution @relation(fields: [institutionId], references: [id])
+  active Boolean @default(true)
+  clinicalRead Boolean @default(false)
+  mustChangePassword Boolean @default(false)
+  temporaryPasswordExpiresAt DateTime?
+  sessionVersion Int @default(0)
+  lastLoginAt DateTime?
+  assignments PatientAssignment[]
   createdAt       DateTime          @default(now())
+  @@index([institutionId, accessLevel, active])
+}
+
+model PatientAssignment {
+  patientId String
+  specialistId String
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  specialist Specialist @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  @@id([patientId, specialistId])
+}
+
+model NeuroDevice {
+  id String @id
+  name String
+  institutionId String @default("neurorobi-default")
+  institution Institution @relation(fields: [institutionId], references: [id])
+  keyHash String @unique
+  active Boolean @default(true)
+  lastSeenAt DateTime?
+  createdAt DateTime @default(now())
+  leasePatientId String?
+  leaseOwnerId String?
+  leaseVersion Int?
+  leaseControllerId String?
+  leaseExpiresAt DateTime?
+  previousSqueeze Boolean @default(false)
+  previousLeft Boolean @default(false)
+  previousRight Boolean @default(false)
+  previousShake Boolean @default(false)
+  sessions ClinicalSession[]
+  packets TelemetryPacket[]
+  @@index([institutionId, active])
+}
+
+model AuditLog {
+  id String @id @default(uuid())
+  actorId String?
+  actorName String
+  institutionId String?
+  action String
+  resource String
+  result String
+  createdAt DateTime @default(now())
+  @@index([institutionId, createdAt])
+}
+
+model PlatformSetting {
+  key String @id
+  value String
 }
 
 model TelemetryPacket {
   id Int @id @default(autoincrement())
   receivedAt DateTime @default(now())
+  deviceId String?
+  device NeuroDevice? @relation(fields: [deviceId], references: [id])
   patientId String?
   payload String
   @@index([receivedAt])

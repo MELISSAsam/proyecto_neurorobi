@@ -11,14 +11,14 @@ const {chromium}=require('playwright');const assert=require('node:assert/strict'
       sockets.add(ws);ws.onClose(()=>sockets.delete(ws));
       ws.onMessage(message=>{
         const text=String(message);
-        if(text.startsWith('40')){ws.send('40'+JSON.stringify({sid:'qa-socket-'+sockets.size}));ws.send('42'+JSON.stringify(['device-status',{deviceType:'oso',connected:true}]));ws.send('42'+JSON.stringify(['therapy-status',{active}]));}
-        else if(text.startsWith('42')){const [event]=JSON.parse(text.slice(2));if(event==='start-stream'){assert.equal(active,true);subscriptions++;if(sendReadings)ws.send('42'+JSON.stringify(['sensor-data',{timestamp:'12:00:01',flexIzq:900,apreton:true,switchIzq:false,switchDer:false,mpu:true,movimiento:20,hugForce:100,rotationX:0,rotationY:0,rotationZ:0,heartRate:-1}]));}}
+        if(text.startsWith('40')){ws.send('40'+JSON.stringify({sid:'qa-socket-'+sockets.size}));ws.send('42'+JSON.stringify(['device-status',{deviceId:'qa-oso',deviceType:'oso',connected:true}]));ws.send('42'+JSON.stringify(['therapy-status',{active}]));}
+        else if(text.startsWith('42')){const [event]=JSON.parse(text.slice(2));if(event==='start-stream'){assert.equal(active,true);subscriptions++;if(sendReadings)ws.send('42'+JSON.stringify(['sensor-data',{deviceId:'qa-oso',timestamp:'12:00:01',flexIzq:900,apreton:true,switchIzq:false,switchDer:false,mpu:true,movimiento:20,hugForce:100,rotationX:0,rotationY:0,rotationZ:0,heartRate:-1}]));}}
       });
       ws.send('0'+JSON.stringify({sid:'qa-engine',upgrades:[],pingInterval:25000,pingTimeout:20000,maxPayload:1000000}));
     });
     await page.route('**/api/**',async route=>{
       const url=new URL(route.request().url());let body={};
-      if(url.pathname==='/api/patients')body=[{id:'qa-patient',name:'Paciente QA',age:8,diagnosis:'QA',status:'Listo para Consulta',registeredAt:'2026-11-16T12:00:00Z'}];
+      if(url.pathname==='/api/auth/me')body={id:'qa-user',name:'Profesional QA',email:'qa@example.test',role:'FISIOTERAPIA',accessLevel:'TERAPEUTA',institutionId:'qa-institution',clinicalRead:false,mustChangePassword:false};else if(url.pathname==='/api/telemetry/devices')body=[{deviceId:'qa-oso',name:'Oso QA',connected:true,therapyActive:active}];else if(url.pathname==='/api/patients')body=[{id:'qa-patient',name:'Paciente QA',age:8,diagnosis:'QA',status:'Listo para Consulta',registeredAt:'2026-11-16T12:00:00Z'}];
       else if(url.pathname==='/api/sessions')body=[];
       else if(url.pathname==='/api/telemetry/control'){
         const data=route.request().postDataJSON();if(data.action==='start'){starts++;active=true;}else if(data.action==='stop'){stops++;active=false;}
@@ -32,7 +32,7 @@ const {chromium}=require('playwright');const assert=require('node:assert/strict'
     const start=page.getByRole('button',{name:'Empezar terapia',exact:true});assert.equal(await start.isDisabled(),true);
     await page.getByLabel('Paciente para terapia').selectOption('qa-patient');assert.equal(await start.isEnabled(),true);
     await page.screenshot({path:path.join(folder,'espera.png'),fullPage:true});
-    await start.click();await page.getByRole('heading',{name:'Apreton a lo largo del tiempo'}).waitFor();assert.equal(starts,1);assert.equal(subscriptions,1);
+    await start.click();await page.getByRole('heading',{name:'Conteo de apretones del estomago'}).waitFor();assert.equal(starts,1);assert.equal(subscriptions,1);
     await page.getByRole('button',{name:/Finalizar.*Guardar Reporte/}).click();
     await page.getByRole('heading',{name:/Informe de interacciones t.ctiles/,exact:true}).waitFor();assert.ok(stops>=1);assert.equal(active,false);
     await page.getByRole('button',{name:'Telemetr\u00eda en Vivo',exact:true}).click();await page.getByText('Hay un informe pendiente.',{exact:false}).waitFor();assert.equal(await page.getByRole('button',{name:'Empezar terapia',exact:true}).isDisabled(),true);
@@ -40,7 +40,7 @@ const {chromium}=require('playwright');const assert=require('node:assert/strict'
     await page.reload();await page.getByRole('button',{name:'Telemetr\u00eda en Vivo',exact:true}).click({timeout:25000});
     await page.getByRole('heading',{name:'NeuroRobi listo para utilizar'}).waitFor();
     await page.getByLabel('Paciente para terapia').selectOption('qa-patient');await page.getByRole('button',{name:'Empezar terapia',exact:true}).click();
-    await page.getByRole('heading',{name:'Apreton a lo largo del tiempo'}).waitFor();
+    await page.getByRole('heading',{name:'Conteo de apretones del estomago'}).waitFor();
     await page.getByRole('button',{name:/Finalizar.*Guardar Reporte/}).click();
     await page.getByRole('heading',{name:'NeuroRobi listo para utilizar'}).waitFor();assert.equal(active,false);assert.equal(starts,2);
     assert.deepEqual(errors,[]);console.log('PASS: espera sin suscripcion ni inicio automatico, paciente requerido, inicio explicito, parada al finalizar e informe pendiente protegido.');console.log('Captura QA:',folder);

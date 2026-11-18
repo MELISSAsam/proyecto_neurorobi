@@ -1,3 +1,4 @@
+import { useDeviceAvailability } from '../../hooks/useDeviceAvailability';
 import React from 'react';
 import { usePatients } from '../../context/PatientContext';
 import { useRole } from '../../context/RoleContext';
@@ -13,9 +14,12 @@ import {
 
 interface TopBarProps {
   onToggleSidebar?: () => void;
+  isAdministrative?:boolean;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
+export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar,isAdministrative=false }) => {
+  const availability=useDeviceAvailability();
+  const online=availability.devices.filter(d=>d.connected).length;
   const { activePatient } = usePatients();
   const { activeRole, setActiveRole, isRoleSelectorEnabled } = useRole();
 
@@ -76,7 +80,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
           <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-50 border border-slate-100 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full min-w-0">
             <span className="h-2 w-2 rounded-full bg-slate-400 shrink-0"></span>
             <span className="text-xs font-bold text-slate-500 truncate hidden sm:inline">
-              Modo Consulta Directa
+              {isAdministrative?'Administracion de NeuroRobi':'Modo Consulta Directa'}
             </span>
             <span className="text-xs font-bold text-slate-500 truncate sm:hidden">
               Consulta
@@ -88,7 +92,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
       {/* RIGHT: Specialist Role Selector Segmented Controller */}
       <div className="flex items-center gap-2 sm:gap-4 shrink-0">
         {/* Role Selector Badge with Select dropdown styled nicely */}
-        <div className="flex items-center gap-2">
+        {!isAdministrative&&<div className="flex items-center gap-2">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden md:inline">
             Especialidad Activa:
           </span>
@@ -121,12 +125,12 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
               <CurrentIcon size={13} className={currentRoleConfig.color.split(' ')[0]} />
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Device Sync LED Badge */}
         <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-50 border border-slate-100 px-2 sm:px-2.5 py-1.5 rounded-xl shadow-xs">
-          <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></div>
-          <span className="text-[10px] font-bold text-slate-500 tracking-wider hidden sm:inline">ESP32: ON</span>
+          <div className={`h-2 w-2 rounded-full shrink-0 ${online?'bg-emerald-500':'bg-slate-300'}`}></div>
+          <span className="text-[10px] font-bold text-slate-500 tracking-wider hidden sm:inline">{availability.serverConnected?`${online}/${availability.devices.length} osos conectados`:'Consultando osos...'}</span>
         </div>
 
       </div>

@@ -60,9 +60,10 @@ export function analyze(readings: Partial<SensorReading>[]) {
     if (last) close(last.t, true);
   }
   events.sort((a, b) => a.start - b.start);
+  const squeezeEvents=events.filter(e=>e.kind==='Apreton');
   let squeezeCount = 0;
   for (const point of points) {
-    squeezeCount = events.filter(e => e.kind === 'Apreton' && e.start <= point.t).length;
+    while(squeezeCount<squeezeEvents.length && squeezeEvents[squeezeCount].start<=point.t)squeezeCount++;
     point.pressure = point.squeeze === null ? null : squeezeCount;
   }
   const squeezes = points.some(p => p.squeeze !== null) ? events.filter(e => e.kind === 'Apreton').length : null;

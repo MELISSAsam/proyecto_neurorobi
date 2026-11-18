@@ -10,33 +10,23 @@ interface PsychologistDashboardProps {
   apreton?: boolean;
   flexIzq?: number;
   movimiento?: number;
+  squeezeCount?:number;
 }
 
 export const PsychologistDashboard: React.FC<PsychologistDashboardProps> = ({
-  currentHugForce,
-  avgHugForce,
+  currentHugForce: _currentHugForce,
+  avgHugForce: _avgHugForce,
   onAddTrigger,
   triggers,
   apreton = false,
-  flexIzq = 0,
+  flexIzq: _flexIzq = 0,
+  squeezeCount=0,
   movimiento = 0
 }) => {
   const [newTrigger, setNewTrigger] = useState('');
 
-  // Calculate emotional comfort state based on bear hug force and apretón
-  let comfortStatus = 'Estable / Reposo Afectivo';
-  let comfortColor = 'text-teal-600 bg-teal-50 border-teal-100';
-  
-  if (apreton || flexIzq > 600) {
-    comfortStatus = 'Abrazo de Co-regulación Afectiva (Apretón ON)';
-    comfortColor = 'text-rose-600 bg-rose-50 border-rose-200 animate-pulse font-black';
-  } else if (currentHugForce > 40) {
-    comfortStatus = 'Buscando Confort / Presión Propioceptiva';
-    comfortColor = 'text-amber-600 bg-amber-50 border-amber-100';
-  } else if (currentHugForce < 10) {
-    comfortStatus = 'Sin Interacción Afectiva Activa';
-    comfortColor = 'text-slate-500 bg-slate-50 border-slate-100';
-  }
+  const comfortStatus=apreton?'Estomago presionado':'Estomago libre';
+  const comfortColor=apreton?'text-teal-700 bg-teal-50 border-teal-200':'text-slate-500 bg-slate-50 border-slate-100';
 
   // Agitation Score directly from MPU6050 movimiento
   const agitationPercentage = Math.min(100, Math.max(0, Math.round(movimiento)));
@@ -49,7 +39,7 @@ export const PsychologistDashboard: React.FC<PsychologistDashboardProps> = ({
   };
 
   // Radial progress calculations (0-100 scale based on flexIzq up to 2000 ADC)
-  const percentValue = Math.min(100, Math.round((flexIzq / 1500) * 100));
+  const percentValue = apreton ? 100 : 0;
   const radius = 50;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (percentValue / 100) * circumference;
@@ -60,7 +50,7 @@ export const PsychologistDashboard: React.FC<PsychologistDashboardProps> = ({
       {/* Widget A: Hug Intensity Circular Gauge & Agitation Bar */}
       <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
         <div className="flex items-center justify-between mb-4">
-          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Afecto y Co-regulación (Peluche)</h4>
+          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Apretones del estomago</h4>
           <span className="text-rose-500"><Heart size={16} fill={apreton ? 'currentColor' : 'none'} className={apreton ? 'animate-bounce' : ''} /></span>
         </div>
 
@@ -90,9 +80,9 @@ export const PsychologistDashboard: React.FC<PsychologistDashboardProps> = ({
             </svg>
             <div className="absolute flex flex-col items-center justify-center">
               <span className={`text-2xl font-black ${apreton ? 'text-rose-600' : 'text-slate-800'}`}>
-                {apreton ? 'ON' : 'OFF'}
+                {squeezeCount}
               </span>
-              <span className="text-[9px] font-bold text-slate-400 uppercase">ADC: {flexIzq}</span>
+              <span className="text-[9px] font-bold text-slate-400 uppercase">Apretones registrados</span>
             </div>
           </div>
 
@@ -112,11 +102,11 @@ export const PsychologistDashboard: React.FC<PsychologistDashboardProps> = ({
               className={`h-2.5 rounded-full transition-all duration-300 ${
                 agitationPercentage > 50 ? 'bg-rose-500' : agitationPercentage > 25 ? 'bg-amber-500' : 'bg-teal-500'
               }`}
-              style={{ width: `${shakeLevel(movimiento)} ({shakeScore(movimiento)}/10)` }}
+              style={{ width: `${agitationPercentage}%` }}
             ></div>
           </div>
           <span className="text-[9px] text-slate-400 mt-1 block">
-            Apretón activo con ADC &gt; 600 en GPIO 32. Promedio sesión: {avgHugForce}%
+            Mantener presionado cuenta una sola vez. Las lecturas no determinan emociones.
           </span>
         </div>
       </div>

@@ -27,6 +27,7 @@ const char* WIFI_STA_PASS = "Sofia1980Kaleb";  // Contraseña de tu red Wi-Fi
 const char* SERVER_URL = "https://neurorobi-backend-production.up.railway.app/api/telemetry";
 
 // 3. Clave del dispositivo (debe coincidir con TELEMETRY_API_KEY en tu .env):
+const char* DEVICE_ID = "oso-principal"; // Identificador registrado en NeuroRobi
 const char* DEVICE_KEY = "sTkRF5mz6DaPA9Ic9oxr0qMw8YGFCEdn";
 
 // Pines de Hardware (100% tus pines originales sin cambios)
@@ -333,6 +334,7 @@ void telemetryTask(void*) {
   http.begin(client, SERVER_URL);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-device-key", DEVICE_KEY);
+  http.addHeader("x-device-id", DEVICE_ID);
   Packet packet;
   unsigned long lastRequest = 0;
   for (;;) {

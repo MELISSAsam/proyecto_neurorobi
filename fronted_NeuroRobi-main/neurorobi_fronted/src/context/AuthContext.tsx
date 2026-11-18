@@ -1,146 +1,66 @@
-import React, { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import type { ReactNode } from 'react';
 import axios from 'axios';
-
-interface AuthContextType {
-  isAuthenticated: boolean;
-  userEmail: string | null;
-  userId: string | null;
-  userName: string | null;
-  userRole: string | null;
-  token: string | null;
-  user: { id: string; email: string; name: string; role: string; profileImageUrl?: string } | null;
-  login: (email: string, pass: string) => Promise<boolean>;
-  logout: () => void;
+export interface AuthUser {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    accessLevel: 'SUPERADMINISTRADOR' | 'ADMINISTRADOR' | 'TERAPEUTA';
+    institutionId: string;
+    clinicalRead: boolean;
+    mustChangePassword: boolean;
+    profileImageUrl?: string;
 }
-
+interface AuthContextType {
+    isAuthenticated: boolean;
+    loading: boolean;
+    userEmail: string | null;
+    userId: string | null;
+    userName: string | null;
+    userRole: string | null;
+    token: string | null;
+    user: AuthUser | null;
+    login: (email: string, password: string) => Promise<boolean>;
+    logout: () => void;
+    refreshUser: () => Promise<void>;
+}
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const API_URL = `${import.meta.env.VITE_API_URL}/api/auth`;
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem('neurorobi_auth_token');
-  });
-
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem('neurorobi_auth') === 'true';
-  });
-  
-  const [userEmail, setUserEmail] = useState<string | null>(() => {
-    return localStorage.getItem('neurorobi_user_email');
-  });
-
-  const [userId, setUserId] = useState<string | null>(() => {
-    return localStorage.getItem('neurorobi_user_id');
-  });
-
-  const [userName, setUserName] = useState<string | null>(() => {
-    return localStorage.getItem('neurorobi_user_name');
-  });
-
-  const [userRole, setUserRole] = useState<string | null>(() => {
-    return localStorage.getItem('neurorobi_user_role');
-  });
-
-  const [user, setUser] = useState<{ id: string; email: string; name: string; role: string; profileImageUrl?: string } | null>(() => {
-    const u = localStorage.getItem('neurorobi_user');
-    if (u) {
-      try {
-        return JSON.parse(u);
-      } catch {
-        // ignore
-      }
-    }
-    // Fallback for older sessions
-    const id = localStorage.getItem('neurorobi_user_id');
-    const email = localStorage.getItem('neurorobi_user_email');
-    const name = localStorage.getItem('neurorobi_user_name');
-    const role = localStorage.getItem('neurorobi_user_role');
-    if (id && email && name && role) {
-      return { id, email, name, role };
-    }
-    return null;
-  });
-
-  const login = async (email: string, pass: string): Promise<boolean> => {
-    try {
-      const response = await axios.post(`${API_URL}/login`, {
-        email: email.trim(),
-        password: pass
-      });
-
-      if (response.data && response.data.token) {
-        const { token: userToken, user } = response.data as {
-          token: string;
-          user: { id: string; email: string; name: string; role: string };
-        };
-
-        setToken(userToken);
-        setIsAuthenticated(true);
-        setUserEmail(user.email);
-        setUserId(user.id);
-        setUserName(user.name);
-        setUserRole(user.role);
-        setUser(user);
-
-        localStorage.setItem('neurorobi_auth_token', userToken);
+const API = `${import.meta.env.VITE_API_URL}/api/auth`;
+const save = (u: AuthUser) => { localStorage.setItem('neurorobi_user', JSON.stringify(u)); localStorage.setItem('neurorobi_user_id', u.id); localStorage.setItem('neurorobi_user_email', u.email); localStorage.setItem('neurorobi_user_name', u.name); localStorage.setItem('neurorobi_user_role', u.role); };
+export function AuthProvider({ children }: {
+    children: ReactNode;
+}) {
+    const [token, setToken] = useState<string | null>(() => localStorage.getItem('neurorobi_auth_token'));
+    const [user, setUser] = useState<AuthUser | null>(null), [loading, setLoading] = useState(!!token);
+    const logout = useCallback(() => { const old = localStorage.getItem('neurorobi_auth_token'); if (old)
+        void axios.post(`${API}/logout`, {}, { headers: { Authorization: `Bearer ${old}` } }).catch(() => { }); setToken(null); setUser(null); for (const k of ['auth_token', 'auth', 'user', 'user_id', 'user_email', 'user_name', 'user_role'])
+        localStorage.removeItem(`neurorobi_${k}`); }, []);
+    const refreshUser = useCallback(async () => { const { data } = await axios.get<AuthUser>(`${API}/me`); setUser(data); save(data); }, []);
+    useEffect(() => { if (!token) {
+        setLoading(false);
+        return;
+    } let alive = true; setLoading(true); axios.get<AuthUser>(`${API}/me`, { headers: { Authorization: `Bearer ${token}` } }).then(({ data }) => { if (alive) {
+        setUser(data);
+        save(data);
+    } }).catch(() => { if (alive)
+        logout(); }).finally(() => { if (alive)
+        setLoading(false); }); return () => { alive = false; }; }, [token, logout]);
+    useEffect(() => { const expire = () => { if (localStorage.getItem('neurorobi_auth_token'))
+        logout(); }; window.addEventListener('neurorobi:unauthorized', expire); return () => window.removeEventListener('neurorobi:unauthorized', expire); }, [logout]);
+    const login = async (email: string, password: string) => { try {
+        const { data } = await axios.post(`${API}/login`, { email: email.trim(), password });
+        localStorage.setItem('neurorobi_auth_token', data.token);
         localStorage.setItem('neurorobi_auth', 'true');
-        localStorage.setItem('neurorobi_user_email', user.email);
-        localStorage.setItem('neurorobi_user_id', user.id);
-        localStorage.setItem('neurorobi_user_name', user.name);
-        localStorage.setItem('neurorobi_user_role', user.role);
-        localStorage.setItem('neurorobi_user', JSON.stringify(user));
-
+        save(data.user);
+        setUser(data.user);
+        setToken(data.token);
         return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('[AuthContext login error]', error);
-      return false;
     }
-  };
-
-  const logout = () => {
-    setToken(null);
-    setIsAuthenticated(false);
-    setUserEmail(null);
-    setUserId(null);
-    setUserName(null);
-    setUserRole(null);
-    setUser(null);
-
-    localStorage.removeItem('neurorobi_auth_token');
-    localStorage.removeItem('neurorobi_auth');
-    localStorage.removeItem('neurorobi_user_email');
-    localStorage.removeItem('neurorobi_user_id');
-    localStorage.removeItem('neurorobi_user_name');
-    localStorage.removeItem('neurorobi_user_role');
-    localStorage.removeItem('neurorobi_user');
-  };
-
-  return (
-    <AuthContext.Provider
-      value={{
-        isAuthenticated,
-        userEmail,
-        userId,
-        userName,
-        userRole,
-        token,
-        user,
-        login,
-        logout
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+    catch {
+        return false;
+    } };
+    return <AuthContext.Provider value={{ isAuthenticated: !!token && !!user, loading, user, token, userEmail: user?.email ?? null, userId: user?.id ?? null, userName: user?.name ?? null, userRole: user?.role ?? null, login, logout, refreshUser }}>{children}</AuthContext.Provider>;
+}
+export function useAuth() { const c = useContext(AuthContext); if (!c)
+    throw new Error('AuthProvider requerido'); return c; }

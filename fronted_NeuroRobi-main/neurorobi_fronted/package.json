@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test:interactions": "node scripts/test-interactions.cjs",
     "test:reports": "node scripts/test-reports-browser.cjs",
-    "test:therapy": "node scripts/test-therapy-browser.cjs"
+    "test:therapy": "node scripts/test-therapy-browser.cjs",
+    "test:admin": "node scripts/test-admin-browser.cjs",
+    "test:ui": "node scripts/run-ui-tests.cjs"
   },
   "dependencies": {
     "axios": "^1.17.0",

@@ -51,8 +51,8 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!cancelled) setRecordsError("No se pudieron cargar los registros del servidor. Comprueba la conexion y vuelve a iniciar sesion si ha caducado.");
       } finally { if (!cancelled) setIsLoadingRecords(false); }
     };
-    if (user) void fetchData();
-    else { setPatients([]); setSessions([]); setIsLoadingRecords(false); setRecordsError(''); }
+    if (user && !user.mustChangePassword && (user.accessLevel !== 'SUPERADMINISTRADOR' || user.clinicalRead)) void fetchData();
+    else { setActivePatient(null);setActiveSession(null);setPatients([]); setSessions([]); setIsLoadingRecords(false); setRecordsError(''); }
     return () => { cancelled = true; };
   }, [user]);
 
@@ -199,6 +199,7 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
       completedAt: new Date().toISOString(),
       metrics,
       sensorHistory,
+      deviceId:sensorHistory.find(r=>r.deviceId)?.deviceId,
       spikesLog,
       deviceType: deviceType ?? (activeSession.deviceType || 'oso')
     };
