@@ -17,13 +17,13 @@ El alta inicial de Superadministrador se ejecuta una sola vez y queda registrada
 
 ## Permisos
 
-- Superadministrador: usuarios, instituciones, dispositivos, estadisticas agregadas, auditoria y configuracion. No tiene acceso clinico automatico.
+- Superadministrador: usuarios, instituciones, dispositivos, estadisticas agregadas, auditoria y configuracion. Tambien puede gestionar pacientes, usar el peluche e iniciar terapias en su propia institucion.
 - Administrador: usuarios terapeutas, pacientes, asignaciones y sesiones de su institucion. Consulta los dispositivos de esa institucion.
 - Terapeuta: pacientes asignados, sus sesiones autorizadas y osos de su institucion. Al crear un paciente queda asignado automaticamente.
 
 La especialidad (Psicologia Clinica, Fisioterapia o Educacion Especial) es independiente del nivel de acceso. Cambiar el panel visual no cambia permisos.
 
-El permiso `clinicalRead` del Superadministrador debe concederse explicitamente y se limita a su institucion. Las consultas clinicas quedan auditadas. Los paneles agregados no incluyen nombres, diagnosticos ni notas de pacientes. El formulario de usuarios permite cambiar la institucion; primero deben retirarse sus asignaciones. Los registros historicos permanecen en la institucion de sus pacientes.
+El Superadministrador tiene acceso clinico y puede utilizar el oso dentro de su propia institucion. Este permiso forma parte de su rol y no necesita habilitar una casilla adicional. Las consultas clinicas quedan auditadas. Los paneles agregados no incluyen nombres, diagnosticos ni notas de pacientes. El formulario de usuarios permite cambiar la institucion; primero deben retirarse sus asignaciones. Los registros historicos permanecen en la institucion de sus pacientes.
 
 Las peticiones HTTP vuelven a comprobar el estado de la cuenta y la version de sesion en la base. Los cambios de rol, institucion, estado o contrasena invalidan tokens anteriores. Socket.IO revalida el acceso en cada suscripcion y periodicamente; la ingestion comprueba tambien los permisos del propietario de la terapia antes de transmitir una lectura.
 

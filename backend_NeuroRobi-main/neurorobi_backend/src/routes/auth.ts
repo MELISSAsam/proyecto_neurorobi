@@ -8,7 +8,7 @@ const router = Router();
 const secret = process.env.JWT_SECRET || 'neurorobi-secret-key-2026';
 if (process.env.NODE_ENV === 'production' && secret.length < 32)
     throw new Error('JWT_SECRET requiere 32 caracteres');
-const safe = (u: any) => ({ id: u.id, email: u.email, name: u.name, role: u.role, accessLevel: u.accessLevel, institutionId: u.institutionId, clinicalRead: u.clinicalRead, mustChangePassword: u.mustChangePassword, profileImageUrl: u.profileImageUrl });
+const safe = (u: any) => ({ id: u.id, email: u.email, name: u.name, role: u.role, accessLevel: u.accessLevel, institutionId: u.institutionId, clinicalRead: u.accessLevel === 'SUPERADMINISTRADOR' || u.clinicalRead, mustChangePassword: u.mustChangePassword, profileImageUrl: u.profileImageUrl });
 const attempts = new Map<string, {
     count: number;
     until: number;

@@ -19,7 +19,7 @@ export async function resolveToken(token: string): Promise<Actor> {
     const single = await multiUserEnabled() ? null : process.env.SINGLE_USER_USERNAME?.trim().toLowerCase();
     if (!user || !user.active || !user.institution.active || (data.version ?? 0) !== user.sessionVersion || (single && user.email !== single))
         return fail(401, 'Sesion invalida o revocada');
-    return user;
+    return { ...user, clinicalRead: user.accessLevel === 'SUPERADMINISTRADOR' || user.clinicalRead };
 }
 export const actor = (res: Response): Actor => res.locals.actor;
 export async function authenticate(req: Request, res: Response, next: NextFunction) {
@@ -48,8 +48,6 @@ export function institutionScope(u: Actor, requested?: string): string | undefin
     return u.institutionId;
 }
 export function patientScope(u: Actor): Prisma.PatientWhereInput {
-    if (u.accessLevel === 'SUPERADMINISTRADOR' && !u.clinicalRead)
-        return { id: { in: [] } };
     return { institutionId: u.institutionId, ...(u.accessLevel === 'TERAPEUTA' ? { assignments: { some: { specialistId: u.id } } } : {}) };
 }
 export async function allowedPatient(u: Actor, id: string) {

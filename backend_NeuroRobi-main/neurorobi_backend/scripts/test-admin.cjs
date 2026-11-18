@@ -40,7 +40,7 @@ async function main(){
  for(const service of ['service-registry','auth-service','patient-service','session-service','telemetry-service','api-gateway']){const p=spawn(process.execPath,[`dist/services/${service}/index.js`],{cwd:root,env,windowsHide:true,stdio:['ignore','pipe','pipe']});children.push(p);p.stdout.on('data',x=>{logs=(logs+x).slice(-20000);});p.stderr.on('data',x=>{logs=(logs+x).slice(-20000);});}
  let ready=false;for(let i=0;i<50;i++){try{await request('/health');ready=true;break;}catch{}await sleep(300);}assert.ok(ready,'Services not ready');
  await request('/api/admin/overview',null,'GET',undefined,401);
- let superUser=await login(env.SINGLE_USER_USERNAME,env.SINGLE_USER_PASSWORD);let st=superUser.token;assert.equal(superUser.user.accessLevel,'SUPERADMINISTRADOR');assert.equal(superUser.user.clinicalRead,false);
+ let superUser=await login(env.SINGLE_USER_USERNAME,env.SINGLE_USER_PASSWORD);let st=superUser.token;assert.equal(superUser.user.accessLevel,'SUPERADMINISTRADOR');assert.equal(superUser.user.clinicalRead,true);
  const A='neurorobi-default',B=(await request('/api/admin/institutions',st,'POST',{name:'Synthetic institution B',contact:'QA only'},201)).id;
  const adminA=await createUser(st,'admin-a@example.test','ADMINISTRADOR',A),adminB=await createUser(st,'admin-b@example.test','ADMINISTRADOR',B),ta=await createUser(st,'therapist-a@example.test','TERAPEUTA',A),tb=await createUser(st,'therapist-b@example.test','TERAPEUTA',B);
  await request('/api/admin/users',adminA.token,'POST',{name:'Forbidden',email:'forbidden@example.test',password:'synthetic-password-123',accessLevel:'ADMINISTRADOR',institutionId:A},403);
@@ -48,7 +48,7 @@ async function main(){
  await request(`/api/admin/users?institutionId=${B}`,adminA.token,'GET',undefined,403);
  await request('/api/admin/users',st,'POST',{name:'Duplicate',email:'ADMIN-A@EXAMPLE.TEST',password:'synthetic-password-123',accessLevel:'ADMINISTRADOR',institutionId:A},409);
  const pA=await request('/api/patients',adminA.token,'POST',{name:'Synthetic private patient A',age:8,diagnosis:'Synthetic private diagnosis A'},201),pB=await request('/api/patients',adminB.token,'POST',{name:'Synthetic private patient B',age:9,diagnosis:'Synthetic private diagnosis B'},201);
- assert.deepEqual(await request('/api/patients',st),[]);await request(`/api/patients/${pA.id}`,st,'GET',undefined,404);await request('/api/admin/assignments',st,'GET',undefined,403);
+ assert.equal((await request('/api/patients',st)).length,1);await request(`/api/patients/${pA.id}`,st);await request(`/api/patients/${pB.id}`,st,'GET',undefined,404);await request('/api/admin/assignments',st);
  await request(`/api/patients/${pB.id}`,adminA.token,'GET',undefined,404);assert.equal((await request('/api/patients',adminA.token)).length,1);
  await request(`/api/patients/${pA.id}`,ta.token,'GET',undefined,404);
  await request('/api/admin/assignments',adminA.token,'PUT',{patientId:pA.id,specialistId:ta.id,assigned:true});await request('/api/admin/assignments',adminB.token,'PUT',{patientId:pB.id,specialistId:tb.id,assigned:true});
@@ -73,6 +73,8 @@ async function main(){
  assert.equal(receivedA.length,1);assert.equal(receivedB.length,1);assert.equal(receivedA[0].deviceId,dA.id);assert.equal(receivedB[0].deviceId,dB.id);
  await request(`/api/admin/devices/${dA.id}`,st,'PATCH',{active:false},409);
  await control(ta.token,dA,pA,'controller-a','stop');await control(tb.token,dB,pB,'controller-b','stop');
+ const superSocket=await connect(st),superReadings=[];superSocket.on('sensor-data',x=>superReadings.push(x));await control(st,dA,pA,'controller-super');superSocket.emit('start-stream',{patientId:pA.id,deviceId:dA.id});await sleep(150);await packet(dA,903);await sleep(150);assert.equal(superReadings.length,1);assert.equal(superReadings[0].deviceId,dA.id);await control(st,dA,pA,'controller-super','stop');
+
  const session=await request('/api/sessions',ta.token,'POST',{patientId:pA.id,specialistId:tb.id,deviceId:dA.id,durationSeconds:1,metrics:{},notes:'Synthetic clinical note',sensorHistory:[{elapsedMs:0,apreton:false,switchIzq:false,switchDer:false,mpu:true,movimiento:0},{elapsedMs:100,apreton:true,switchIzq:true,switchDer:false,mpu:true,movimiento:70},{elapsedMs:200,apreton:true,switchIzq:true,switchDer:false,mpu:true,movimiento:70},{elapsedMs:300,apreton:false,switchIzq:false,switchDer:false,mpu:true,movimiento:0}]},201);
  assert.equal(session.specialistId,ta.id);assert.equal(session.deviceId,dA.id);await request(`/api/sessions/${session.id}`,tb.token,'GET',undefined,404);await request(`/api/sessions/${session.id}/notes`,tb.token,'PATCH',{notes:'Forbidden'},404);
  await request('/api/sessions',ta.token,'POST',{patientId:pA.id,deviceId:dB.id,metrics:{}},403);
