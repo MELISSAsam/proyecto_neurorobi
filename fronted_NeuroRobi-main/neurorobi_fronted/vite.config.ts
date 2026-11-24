@@ -6,11 +6,9 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd());
   if (process.env.VERCEL) {
-    for (const key of ['VITE_API_URL', 'VITE_WS_URL']) {
-      const value = env[key];
-      if (!value || !/^https:\/\/[^/]+$/.test(value)) {
-        throw new Error(`${key} debe ser el dominio HTTPS del backend, sin barra final ni /api`);
-      }
+    const apiUrl = env.VITE_API_URL;
+    if (!apiUrl || !/^https:\/\/[^/]+$/.test(apiUrl)) {
+      throw new Error('VITE_API_URL debe ser el dominio HTTPS del backend, sin barra final ni /api');
     }
   }
   return {

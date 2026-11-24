@@ -1,14 +1,13 @@
 import { PrismaClient } from '@prisma/client';
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
+import { PrismaPg } from '@prisma/adapter-pg';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-// SQLite local (dev.db) para desarrollo sin infraestructura externa.
-// Para PostgreSQL cambiando a @prisma/adapter-pg y la URL de conexión.
-const dbUrl = (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('file:'))
-  ? process.env.DATABASE_URL
-  : 'file:./dev.db';
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString || !/^postgres(ql)?:\/\//i.test(connectionString)) {
+  throw new Error('DATABASE_URL debe ser una URL PostgreSQL válida.');
+}
 
-const adapter = new PrismaBetterSqlite3({ url: dbUrl });
+const adapter = new PrismaPg({ connectionString, max: 3, idleTimeoutMillis: 10000, connectionTimeoutMillis: 5000 });
 export const prisma = new PrismaClient({ adapter });

@@ -1,12 +1,12 @@
 #include <WiFi.h>
-#include <WebServer.h>
-#include <Preferences.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <HTTPClient.h>
-#include <WiFiClientSecure.h>
+#include <WiFiClient.h>
+#include "telemetry.local.h"
 #include <math.h>
+#include <esp_system.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
@@ -15,20 +15,10 @@
 // NEUROROBI ESP32 38 PINES - OSO TERAPÉUTICO CON ENVÍO AL SERVIDOR
 // =========================================================================
 
-// 1. Configuración de tu red Wi-Fi (para que el ESP32 tenga acceso al servidor):
-const char* WIFI_STA_SSID = "SAGBAY";      // Nombre de tu red Wi-Fi
-const char* WIFI_STA_PASS = "Sofia1980Kaleb";  // Contraseña de tu red Wi-Fi
-
-// 2. URL del Servidor Desplegado (o local):
-// Si está en Railway/Render pon la URL HTTPS completa, por ejemplo:
-// "https://neurorobi-backend-production.up.railway.app/api/telemetry"
-// Si estás probando en tu PC local en la misma red Wi-Fi:
-// "http://192.168.110.26:3001/api/telemetry"
-const char* SERVER_URL = "https://neurorobi-backend-production.up.railway.app/api/telemetry";
-
-// 3. Clave del dispositivo (debe coincidir con TELEMETRY_API_KEY en tu .env):
+// La red Wi-Fi fija se configura en telemetry.local.h.
+const char* SERVER_URL = "http://" NEUROROBI_SERVER_IP ":3001/api/telemetry";
 const char* DEVICE_ID = "oso-principal"; // Identificador registrado en NeuroRobi
-const char* DEVICE_KEY = "sTkRF5mz6DaPA9Ic9oxr0qMw8YGFCEdn";
+const char* DEVICE_KEY = NEUROROBI_DEVICE_KEY;
 
 // Pines de Hardware (100% tus pines originales sin cambios)
 const int FLEX_APRETON   = 32;
@@ -37,18 +27,6 @@ const int SWITCH_DER     = 19;
 const int SDA_PIN        = 16;
 const int SCL_PIN        = 4;
 const int UMBRAL_APRETON = 600; // ON solo cuando ADC > 600
-
-// Configuracion local independiente de Internet.
-WebServer configServer(80);
-Preferences wifiPreferences;
-struct WifiCredentials { char ssid[33]; char pass[64]; };
-String savedSsid, savedPass, pendingSsid, pendingPass;
-String configName, configPassword, configToken;
-bool configActive = false, wifiAttempt = false, applyPending = false;
-bool credentialsPending = false, configGestureLatched = false;
-unsigned long wifiAttemptAt = 0, disconnectedAt = 0, connectedAt = 0;
-unsigned long submittedAt = 0, gestureAt = 0, lastReconnectAt = 0;
-String configStatus = "Introduce la red Wi-Fi de 2.4 GHz del peluche.";
 
 struct Packet { char json[768]; };
 QueueHandle_t telemetryQueue;
@@ -76,7 +54,8 @@ void iniciarOLED() {
   if (i2cPresente(0x3C)) dir = 0x3C;
   else if (i2cPresente(0x3D)) dir = 0x3D;
   else { Serial.println("OLED no detectada (0x3C / 0x3D)"); return; }
-  oledOK = display.begin(SSD1306_SWITCHCAPVCC, dir);
+  // Wire ya usa los pines SDA16/SCL4 definidos en setup().
+  oledOK = display.begin(SSD1306_SWITCHCAPVCC, dir, true, false);
   if (!oledOK) { Serial.println("Error iniciando OLED"); return; }
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
@@ -150,15 +129,6 @@ const char* nivelSacudida() {
 void actualizarOLED() {
   if (!oledOK) return;
   display.clearDisplay();
-  if (configActive) {
-    display.setTextColor(SSD1306_WHITE); display.setTextSize(1);
-    display.setCursor(0, 0); display.print("CONFIGURAR WI-FI");
-    display.setCursor(0, 12); display.print(configName);
-    display.setCursor(0, 26); display.print("Clave: "); display.print(configPassword);
-    display.setCursor(0, 40); display.print("192.168.4.1");
-    display.setCursor(0, 54); display.print("Desde tu celular");
-    display.display(); return;
-  }
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
   if (!therapyActive) {
@@ -191,147 +161,27 @@ String construirJSON() {
   return j;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// ENVÍO DE DATOS AL SERVIDOR (HTTP POST a /api/telemetry)
-// Soporta tanto HTTPS (servidor desplegado en nube) como HTTP (red local).
-// ─────────────────────────────────────────────────────────────────────────
-const char WIFI_FORM[] PROGMEM = R"wifihtml(
-<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Wi-Fi del peluche | NeuroRobi</title><style>body{font:16px system-ui;background:#f0fdfa;color:#134e4a;padding:24px}main{max-width:420px;margin:auto;background:white;padding:24px;border-radius:20px}label{display:block;margin-top:18px}input,button{box-sizing:border-box;width:100%;padding:12px;margin-top:8px;border:1px solid #99f6e4;border-radius:10px}button{background:#0f766e;color:white;font-weight:bold}small{display:block;margin-top:16px;color:#475569}</style>
-<main><h1>Conectar el peluche</h1><p>No necesitas Internet para cambiar la red.</p>
-<form method="POST" action="/wifi"><input type="hidden" name="token" value="TOKEN_VALUE">
-<label>Nombre de la red (SSID)<input name="ssid" maxlength="32" required autocomplete="off"></label>
-<label>Contrasena del Wi-Fi<input name="password" type="password" minlength="8" maxlength="63" required autocomplete="new-password"></label>
-<button>Probar y guardar red</button></form>
-<p id="status">STATUS_VALUE</p><small>Usa una red de 2.4 GHz. La red anterior se conserva si la nueva no conecta. Desactiva el cambio automatico a datos moviles y permanece en la red del peluche durante la prueba.</small></main>
-<script>setInterval(async()=>{try{let r=await fetch('/estado',{cache:'no-store'});let d=await r.json();document.getElementById('status').textContent=d.message}catch{}},1500)</script></html>
-)wifihtml";
-
-void startWifiConfig() {
-  if (configActive) return;
-  char suffix[9], password[13], token[33];
-  snprintf(suffix, sizeof(suffix), "%06lX", (unsigned long)(ESP.getEfuseMac() & 0xFFFFFF));
-  snprintf(password, sizeof(password), "%08lX", (unsigned long)esp_random());
-  snprintf(token, sizeof(token), "%08lX%08lX%08lX%08lX", (unsigned long)esp_random(), (unsigned long)esp_random(), (unsigned long)esp_random(), (unsigned long)esp_random());
-  configName = String("NeuroRobi_Config_") + suffix;
-  configPassword = password;
-  configToken = token;
-  WiFi.mode(WIFI_AP_STA);
-  if (!WiFi.softAP(configName.c_str(), configPassword.c_str(), 1, false, 1)) {
-    Serial.println("No se pudo iniciar configuracion Wi-Fi"); return;
-  }
-  configActive = true;
-  connectedAt = 0;
-  configStatus = "Introduce la nueva red Wi-Fi. La clave de esta pagina aparece en la OLED.";
-  configServer.begin();
-  Serial.printf("Config Wi-Fi: %s | clave: %s | http://192.168.4.1\n", configName.c_str(), configPassword.c_str());
-}
-
-void setupWifiConfig() {
-  wifiPreferences.begin("neurorobi-wifi", false);
-  WifiCredentials stored = {};
-  if (wifiPreferences.getBytesLength("network") == sizeof(stored) &&
-      wifiPreferences.getBytes("network", &stored, sizeof(stored)) == sizeof(stored)) {
-    stored.ssid[32] = 0; stored.pass[63] = 0;
-    savedSsid = stored.ssid; savedPass = stored.pass;
-  }
-  if (savedSsid.isEmpty() && String(WIFI_STA_SSID) != "TU_WIFI_AQUI") {
-    savedSsid = WIFI_STA_SSID; savedPass = WIFI_STA_PASS;
-  }
-  configServer.on("/", HTTP_GET, []() {
-    String page = FPSTR(WIFI_FORM);
-    page.replace("TOKEN_VALUE", configToken);
-    // Estado fijo del firmware: nunca insertar SSID o claves en HTML.
-    page.replace("STATUS_VALUE", "Esperando configuracion. Si ya guardaste, espera el resultado.");
-    configServer.sendHeader("Cache-Control", "no-store");
-    configServer.send(200, "text/html; charset=utf-8", page);
-  });
-  configServer.on("/estado", HTTP_GET, []() {
-    configServer.sendHeader("Cache-Control", "no-store");
-    configServer.send(200, "application/json", String("{\"message\":\"") + configStatus + "\"}");
-  });
-  configServer.on("/wifi", HTTP_POST, []() {
-    if (!configActive || configServer.arg("token") != configToken) { configServer.send(403, "text/plain", "Solicitud invalida. Abre la pagina de nuevo."); return; }
-    if (credentialsPending || applyPending) { configServer.send(409, "text/plain", "Espera el resultado de la prueba anterior."); return; }
-    String ssid = configServer.arg("ssid"), pass = configServer.arg("password");
-    if (ssid.length() < 1 || ssid.length() > 32 || pass.length() < 8 || pass.length() > 63) { configServer.send(400, "text/plain", "SSID: 1 a 32 bytes. Contrasena: 8 a 63 caracteres."); return; }
-    pendingSsid = ssid; pendingPass = pass;
-    applyPending = true; submittedAt = millis();
-    configStatus = "Probando la red. Espera hasta 25 segundos sin cerrar esta pagina.";
-    configServer.sendHeader("Location", "/"); configServer.send(303, "text/plain", "Probando red");
-  });
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);
-  WiFi.setAutoReconnect(false);
+void iniciarWiFi() {
   WiFi.persistent(false);
-  if (!savedSsid.isEmpty()) {
-    WiFi.begin(savedSsid.c_str(), savedPass.c_str());
-    wifiAttempt = true; wifiAttemptAt = millis();
-  } else startWifiConfig();
+  Serial.println("Wi-Fi: conectando a la red fija");
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.begin(NEUROROBI_WIFI_SSID, NEUROROBI_WIFI_PASSWORD);
 }
 
-void handleWifiConfig() {
-  unsigned long now = millis();
-  // Mantener AMBOS finales de carrera durante 5 s abre configuracion.
-  if (switchIzq && switchDer) {
-    if (gestureAt == 0) gestureAt = now;
-    if (!configGestureLatched && now - gestureAt >= 5000) { configGestureLatched = true; startWifiConfig(); }
-  } else { gestureAt = 0; configGestureLatched = false; }
-  if (configActive) configServer.handleClient();
-  if (applyPending && now - submittedAt >= 500) {
-    applyPending = false; credentialsPending = true;
-    WiFi.disconnect(false, false);
-    WiFi.begin(pendingSsid.c_str(), pendingPass.c_str());
-    wifiAttempt = true; wifiAttemptAt = now; connectedAt = 0;
-  }
-  if (credentialsPending && now - wifiAttemptAt < 1000) return;
-  if (WiFi.status() == WL_CONNECTED) {
-    wifiAttempt = false; disconnectedAt = 0;
-    if (credentialsPending) {
-      // Solo escribir en memoria despues de conectar correctamente.
-      WifiCredentials candidate = {};
-      pendingSsid.toCharArray(candidate.ssid, sizeof(candidate.ssid));
-      pendingPass.toCharArray(candidate.pass, sizeof(candidate.pass));
-      bool stored = wifiPreferences.putBytes("network", &candidate, sizeof(candidate)) == sizeof(candidate);
-      if (!stored) {
-        configStatus = "Error guardando la red. Intenta nuevamente.";
-        credentialsPending = false; pendingPass = ""; connectedAt = 0;
-        return;
-      }
-      savedSsid = pendingSsid; savedPass = pendingPass; pendingPass = "";
-      credentialsPending = false;
-      configStatus = "Red conectada y guardada. Vuelve a tu Wi-Fi habitual y abre NeuroRobi.";
-      connectedAt = now;
-    }
-    if (configActive && connectedAt != 0 && now - connectedAt >= 15000) {
-      configServer.stop(); WiFi.softAPdisconnect(true); WiFi.mode(WIFI_STA); configActive = false;
-    }
-    return;
-  }
-  if (wifiAttempt && now - wifiAttemptAt >= 25000) {
-    wifiAttempt = false;
-    if (credentialsPending) {
-      credentialsPending = false; pendingPass = "";
-      configStatus = "No se pudo conectar. Revisa nombre, clave y red de 2.4 GHz. La red anterior sigue guardada.";
-    }
-    startWifiConfig();
-  }
-  if (disconnectedAt == 0) disconnectedAt = now;
-  if (!configActive && now - disconnectedAt >= 25000) startWifiConfig();
-  if (!credentialsPending && !applyPending && !wifiAttempt && !savedSsid.isEmpty() && now - lastReconnectAt >= 10000) {
-    lastReconnectAt = now; WiFi.begin(savedSsid.c_str(), savedPass.c_str());
-  }
-}
 
 // Red en tarea independiente: no bloquea sensores ni OLED y no acumula retraso.
 void telemetryTask(void*) {
-  WiFiClientSecure client;
-  client.setInsecure();
+  WiFiClient client;
   HTTPClient http;
   http.setReuse(true);
   http.setConnectTimeout(2000);
   http.setTimeout(2000);
-  http.begin(client, SERVER_URL);
+  if (!http.begin(client, SERVER_URL)) {
+    Serial.println("URL de telemetria invalida");
+    vTaskDelete(nullptr);
+    return;
+  }
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-device-key", DEVICE_KEY);
   http.addHeader("x-device-id", DEVICE_ID);
@@ -339,7 +189,9 @@ void telemetryTask(void*) {
   unsigned long lastRequest = 0;
   for (;;) {
     if (WiFi.status() != WL_CONNECTED) {
+      if (therapyActive) xQueueReset(telemetryQueue);
       servidorOK = false; therapyActive = false;
+      client.stop();
       vTaskDelay(pdMS_TO_TICKS(100)); continue;
     }
     String payload;
@@ -358,6 +210,7 @@ void telemetryTask(void*) {
     therapyActive = servidorOK && response.indexOf("\"therapyActive\":true") >= 0;
     if (wasActive && !therapyActive) xQueueReset(telemetryQueue);
     if (!servidorOK) {
+      client.stop();
       Serial.printf("Servidor HTTP: %d (401: revisar DEVICE_KEY)\n", code);
       vTaskDelay(pdMS_TO_TICKS(500));
     }
@@ -367,6 +220,7 @@ void telemetryTask(void*) {
 void setup() {
   Serial.begin(115200);
   delay(800);
+  Serial.printf("NEUROROBI Wi-Fi | motivo de arranque: %d\n", (int)esp_reset_reason());
   pinMode(SWITCH_IZQ, INPUT_PULLUP);
   pinMode(SWITCH_DER, INPUT_PULLUP);
   analogReadResolution(12);
@@ -378,18 +232,15 @@ void setup() {
   iniciarMPU();
   actualizarOLED();
 
-  setupWifiConfig();
+  iniciarWiFi();
 
   telemetryQueue = xQueueCreate(1, sizeof(Packet));
   if (!telemetryQueue) { Serial.println("Error creando cola de telemetria"); while (true) delay(1000); }
   xTaskCreate(telemetryTask, "telemetry", 12288, nullptr, 1, nullptr);
-  Serial.println("Peluche listo. Mantener ambos switches 5 segundos para configurar Wi-Fi.");
+  Serial.println("Peluche listo. Esperando conexion con NeuroRobi.");
 }
 
 void loop() {
-  handleWifiConfig();
-
-  
   // Lectura de sensores cada 100ms
   if (millis() - tSensores >= 100) { 
     tSensores = millis(); 
@@ -404,7 +255,7 @@ void loop() {
     actualizarOLED(); 
   }
 
-  // Envío al servidor remoto desplegado cada 100ms
+  // Envío al servidor local cada 100ms
   if (therapyActive && millis() - tServer >= 100) {
     tServer = millis();
     Packet packet;
@@ -418,4 +269,5 @@ void loop() {
     Serial.printf("APRETON=%s | SW18=%d SW19=%d | SACUDIDA=%s | SRV=%s\n",
       apreton ? "SI" : "NO", switchIzq, switchDer, therapyActive ? nivelSacudida() : "EN ESPERA", servidorOK ? "OK(200)" : "ERROR");
   }
+  delay(5);
 }

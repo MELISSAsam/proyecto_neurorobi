@@ -68,7 +68,6 @@ export const LiveTelemetry: React.FC<LiveTelemetryProps> = ({
     deviceId:currentDeviceId,
     deviceType: 'oso',
     simulate: false,
-    directEsp32Ip: null
   });
 
   const latestReading = oso.streamData[oso.streamData.length - 1] || {

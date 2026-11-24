@@ -2,17 +2,27 @@ import type { Request, Response, NextFunction } from 'express';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import { prisma } from './db';
 import type { Specialist, Prisma } from '@prisma/client';
+const jwtSecret = process.env.JWT_SECRET?.trim();
+if (!jwtSecret || jwtSecret.length < 32) {
+    throw new Error('JWT_SECRET es obligatorio y debe tener al menos 32 caracteres.');
+}
+export const JWT_SECRET = jwtSecret;
 export type Actor = Specialist;
+let multiUserCache: { value: boolean; expiresAt: number } | undefined;
 export class HttpError extends Error {
     constructor(public status: number, message: string) { super(message); }
 }
 export function fail(status: number, message: string): never { throw new HttpError(status, message); }
 export async function multiUserEnabled(): Promise<boolean> {
+    if (multiUserCache && multiUserCache.expiresAt > Date.now()) return multiUserCache.value;
     const flag=await prisma.platformSetting.findUnique({where:{key:'multiUserEnabled'}});
-    return flag ? flag.value==='true' : process.env.MULTI_USER_ENABLED==='true';
+    const value = flag ? flag.value==='true' : process.env.MULTI_USER_ENABLED==='true';
+    multiUserCache = { value, expiresAt: Date.now() + 30000 };
+    return value;
 }
+export function invalidateMultiUserEnabledCache() { multiUserCache = undefined; }
 export async function resolveToken(token: string): Promise<Actor> {
-    const data = jwt.verify(token, process.env.JWT_SECRET || 'neurorobi-secret-key-2026') as JwtPayload;
+    const data = jwt.verify(token, JWT_SECRET) as JwtPayload;
     if (!data || typeof data.id !== 'string')
         return fail(401, 'Sesion invalida');
     const user = await prisma.specialist.findUnique({ where: { id: data.id }, include: { institution: true } });

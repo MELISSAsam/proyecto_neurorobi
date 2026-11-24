@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import { corsOptions, allowedCorsOrigins } from '../../shared/cors-options';
 import { createServer } from 'http';
 import { createHash } from 'crypto';
 import { Server } from 'socket.io';
@@ -9,11 +10,13 @@ import { authenticate, actor, resolveToken, allowedPatient, patientScope, audit,
 import { registerService } from '../../shared/service-utils';
 import type { NeuroDevice } from '@prisma/client';
 const app = express();
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '256kb' }));
-const server = createServer(app), io = new Server(server, { cors: { origin: '*' } });
+const server = createServer(app), io = new Server(server, { cors: { origin: allowedCorsOrigins, methods: ['GET', 'POST'] } });
 const LEASE_MS = Math.max(1000, Number(process.env.THERAPY_LEASE_MS) || 12000);
 const deviceRoom = (id: string) => `device:${id}`, patientRoom = (id: string, deviceId: string) => `patient:${id}:device:${deviceId}`;
+const leaseValidationCache = new Map<string, { valid: boolean; expiresAt: number }>();
+const lastSeenWrites = new Map<string, number>();
 const clearLease = { leasePatientId: null, leaseOwnerId: null, leaseVersion: null, leaseControllerId: null, leaseExpiresAt: null, previousSqueeze: false, previousLeft: false, previousRight: false, previousShake: false };
 const status = (d: NeuroDevice) => ({ deviceId: d.id, deviceType: 'oso', name: d.name, connected: d.active && !!d.lastSeenAt && Date.now() - d.lastSeenAt.getTime() < 6000, therapyActive: !!d.leaseExpiresAt && d.leaseExpiresAt.getTime() > Date.now() });
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
@@ -27,14 +30,19 @@ async function deviceForUser(res: express.Response, id: unknown) {
 async function validLease(d: NeuroDevice) {
     if (!d.leasePatientId || !d.leaseOwnerId || !d.leaseExpiresAt || d.leaseExpiresAt <= new Date())
         return false;
+    const key = `${d.id}:${d.leaseOwnerId}:${d.leasePatientId}:${d.leaseVersion}:${d.leaseExpiresAt.getTime()}`;
+    const cached = leaseValidationCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) return cached.valid;
     const owner = await prisma.specialist.findUnique({ where: { id: d.leaseOwnerId }, include: { institution: true } });
     if (!owner || !owner.active || !owner.institution.active || owner.mustChangePassword || owner.sessionVersion !== d.leaseVersion || owner.institutionId !== d.institutionId)
         return false;
     try {
         await allowedPatient(owner, d.leasePatientId);
+        leaseValidationCache.set(key, { valid: true, expiresAt: Date.now() + 1000 });
         return true;
     }
     catch {
+        leaseValidationCache.set(key, { valid: false, expiresAt: Date.now() + 1000 });
         return false;
     }
 }
@@ -95,8 +103,12 @@ app.post('/api/telemetry', async (req, res) => {
         fail(401, 'Dispositivo no autorizado');
     if (req.body?.deviceType && String(req.body.deviceType).toLowerCase() !== 'oso')
         fail(400, 'Solo se admite el oso');
-    await prisma.neuroDevice.update({ where: { id: d.id }, data: { lastSeenAt: new Date() } });
-    const s = { ...status({ ...d, lastSeenAt: new Date() }), connected: true };
+    const lastSeenAt = new Date();
+    if (lastSeenAt.getTime() - (lastSeenWrites.get(d.id) || 0) >= 2000) {
+        await prisma.neuroDevice.update({ where: { id: d.id }, data: { lastSeenAt } });
+        lastSeenWrites.set(d.id, lastSeenAt.getTime());
+    }
+    const s = { ...status({ ...d, lastSeenAt }), connected: true };
     io.to(deviceRoom(d.id)).emit('device-status', s);
     const active = await validLease(d);
     if (!active && d.leaseExpiresAt) {
@@ -123,7 +135,7 @@ app.post('/api/telemetry', async (req, res) => {
     const giroX = finite(req.body.giroX ?? req.body.rotationX), giroY = finite(req.body.giroY ?? req.body.rotationY), giroZ = finite(req.body.giroZ ?? req.body.rotationZ);
     const receivedAt = new Date().toISOString(), timestamp = new Date().toLocaleTimeString('en-GB', { timeZone: 'America/Guayaquil' });
     const payload = { deviceId: d.id, deviceType: 'oso', receivedAt, timestamp, flexIzq, apreton, switchIzq, switchDer, mpu, movimiento, accX: finite(req.body.accX), accY: finite(req.body.accY), accZ: finite(req.body.accZ, 1), giroX, giroY, giroZ, hugForce: apreton ? 100 : 0, rotationX: giroX, rotationY: giroY, rotationZ: giroZ, heartRate: -1, switch1: switchIzq, switch2: switchDer, shakeIntensity: movimiento };
-    await prisma.$transaction(async (tx) => { await tx.telemetryPacket.create({ data: { deviceId: d.id, patientId: d.leasePatientId, payload: JSON.stringify(payload) } }); await tx.neuroDevice.update({ where: { id: d.id }, data: { previousSqueeze: apreton, previousLeft: switchIzq, previousRight: switchDer, previousShake: mpu && movimiento >= 60 } }); });
+    await prisma.$transaction(async (tx) => { await tx.telemetryPacket.create({ data: { deviceId: d.id, patientId: d.leasePatientId, payload } }); await tx.neuroDevice.update({ where: { id: d.id }, data: { previousSqueeze: apreton, previousLeft: switchIzq, previousRight: switchDer, previousShake: mpu && movimiento >= 60 } }); });
     const room = patientRoom(d.leasePatientId!, d.id);
     io.to(room).emit('sensor-data', payload);
     if (apreton && !d.previousSqueeze)
@@ -172,6 +184,7 @@ io.on('connection', async (socket) => {
         await socket.leave(socket.data.patientRoom); socket.data.patientRoom = null; });
 });
 let checking = false;
+let nextPacketPruneAt = Date.now() + 6 * 60 * 60 * 1000;
 setInterval(async () => {
     if (checking)
         return;
@@ -202,6 +215,13 @@ setInterval(async () => {
             }
             io.to(deviceRoom(d.id)).emit('device-status', status(d));
         }
+        const now = Date.now();
+        if (now >= nextPacketPruneAt) {
+            const cutoff = new Date(now - 30 * 24 * 60 * 60 * 1000);
+            const removed = await prisma.telemetryPacket.deleteMany({ where: { receivedAt: { lt: cutoff } } });
+            nextPacketPruneAt = now + 6 * 60 * 60 * 1000;
+            if (removed.count) console.log(`[Telemetry retention] Removed ${removed.count} packets older than 30 days`);
+        }
     }
     catch (e) {
         console.error('[Telemetry status]', e instanceof Error ? e.message : 'Error');
@@ -209,6 +229,6 @@ setInterval(async () => {
     finally {
         checking = false;
     }
-}, 1000);
+}, 5000);
 app.use(errorHandler);
 server.listen(Number(process.env.TELEMETRY_PORT) || 3005, () => registerService('telemetry-service', Number(process.env.TELEMETRY_PORT) || 3005));

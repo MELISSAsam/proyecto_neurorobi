@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import axios from 'axios';
 import type { SensorReading, SpikesLogItem } from '../types';
 
 interface UseSensorStreamProps {
@@ -10,7 +9,6 @@ interface UseSensorStreamProps {
   deviceId?: string;
   deviceType?: 'oso';
   simulate?: boolean;
-  directEsp32Ip?: string | null; // e.g. '192.168.4.1' para lectura directa WiFi
 }
 
 export const useSensorStream = ({
@@ -20,7 +18,6 @@ export const useSensorStream = ({
   deviceId,
   deviceType = 'oso',
   simulate = false,
-  directEsp32Ip = null
 }: UseSensorStreamProps) => {
   const [streamData, setStreamData] = useState<SensorReading[]>([]);
   const [spikesLog, setSpikesLog] = useState<SpikesLogItem[]>([]);
@@ -177,7 +174,7 @@ export const useSensorStream = ({
     if (isStreaming && patientId) {
       resetStream();
 
-      const newSocket = io(import.meta.env.VITE_WS_URL, {
+      const newSocket = io(import.meta.env.VITE_API_URL, {
         transports: ['websocket', 'polling'],
         auth: (cb) => cb({ token: localStorage.getItem('neurorobi_auth_token') })
       });
@@ -318,88 +315,9 @@ export const useSensorStream = ({
           onSpikeTriggeredRef.current(spike);
         }
       });
-
-      // Modo directo: Polling al ESP32 (vía backend proxy o directo)
-      let directPollTimer: ReturnType<typeof setInterval> | undefined;
-      if (directEsp32Ip) {
-        setIsDeviceConnected(true);
-        directPollTimer = setInterval(async () => {
-          try {
-            // Intentar primero proxy de telemetría para evitar CORS
-            const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/telemetry/poll-esp32?ip=${directEsp32Ip}`, { timeout: 1500 });
-            if (res.data) {
-              const d = res.data;
-              const packet: SensorReading = {
-                timestamp: renderTimestamp(),
-                deviceType: 'oso',
-                flexIzq: d.flexIzq,
-                flexDer: d.flexDer,
-                apreton: d.apreton,
-                nivelDer: d.nivelDer,
-                switchIzq: d.switchIzq,
-                switchDer: d.switchDer,
-                mpu: d.mpu,
-                accX: d.accX,
-                accY: d.accY,
-                accZ: d.accZ,
-                giroX: d.giroX,
-                giroY: d.giroY,
-                giroZ: d.giroZ,
-                movimiento: d.movimiento,
-                hugForce: (d.nivelDer || 1) * 10,
-                rotationX: d.giroX,
-                rotationY: d.giroY,
-                rotationZ: d.giroZ,
-                heartRate: -1,
-                switch1: d.switchIzq,
-                switch2: d.switchDer,
-                shakeIntensity: d.movimiento
-              };
-              handleSensorData(packet);
-            }
-          } catch {
-            // Fallback directo
-            try {
-              const resDirect = await fetch(`http://${directEsp32Ip}/datos`, { cache: 'no-store' });
-              if (resDirect.ok) {
-                const d = await resDirect.json();
-                handleSensorData({
-                  timestamp: renderTimestamp(),
-                  deviceType: 'oso',
-                  flexIzq: d.flexIzq,
-                  flexDer: d.flexDer,
-                  apreton: d.apreton,
-                  nivelDer: d.nivelDer,
-                  switchIzq: d.switchIzq,
-                  switchDer: d.switchDer,
-                  mpu: d.mpu,
-                  accX: d.accX,
-                  accY: d.accY,
-                  accZ: d.accZ,
-                  giroX: d.giroX,
-                  giroY: d.giroY,
-                  giroZ: d.giroZ,
-                  movimiento: d.movimiento,
-                  hugForce: (d.nivelDer || 1) * 10,
-                  rotationX: d.giroX,
-                  rotationY: d.giroY,
-                  rotationZ: d.giroZ,
-                  heartRate: -1,
-                  switch1: d.switchIzq,
-                  switch2: d.switchDer,
-                  shakeIntensity: d.movimiento
-                });
-              }
-            } catch {
-              // Silencioso mientras reconecta
-            }
-          }
-        }, 300);
-      }
-
       // Simulation mode
       let simTimer: ReturnType<typeof setInterval> | undefined;
-      if (simulate && !directEsp32Ip) {
+      if (simulate) {
         setIsDeviceConnected(true);
         simTimer = setInterval(() => {
           handleSensorData(generateSimulatedPacket());
@@ -407,7 +325,6 @@ export const useSensorStream = ({
       }
 
       return () => {
-        if (directPollTimer) clearInterval(directPollTimer);
         if (simTimer) clearInterval(simTimer);
         newSocket.emit('stop-stream');
         newSocket.disconnect();
@@ -419,7 +336,7 @@ export const useSensorStream = ({
         setSocket(null);
       }
     }
-  }, [isStreaming, patientId, deviceId, resetStream, simulate, directEsp32Ip, generateSimulatedPacket, renderTimestamp]);
+  }, [isStreaming, patientId, deviceId, resetStream, simulate, generateSimulatedPacket, renderTimestamp]);
 
   return {
     streamData,

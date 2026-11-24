@@ -11,3 +11,5 @@ dist/
 uploads/
 backups/
 *.tar.gz
+.local-*.log
+esp32_firmware/NeuroRobi_Oso/telemetry.local.h

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { randomBytes, createHash } from 'crypto';
 import { prisma } from '../shared/db';
-import { authenticate, actor, superOnly, managerOnly, institutionScope, audit, fail, multiUserEnabled } from '../shared/security';
+import { authenticate, actor, superOnly, managerOnly, institutionScope, audit, fail, multiUserEnabled, invalidateMultiUserEnabledCache } from '../shared/security';
 const router = Router();
 router.use(authenticate);
 const levels = ['SUPERADMINISTRADOR', 'ADMINISTRADOR', 'TERAPEUTA'];
@@ -244,6 +244,7 @@ router.put('/settings',async(req,res)=>{
         if(key==='multiUserEnabled')await tx.specialist.updateMany({data:{sessionVersion:{increment:1}}});
         await audit(u,'SETTING_UPDATE',key,'SUCCESS',tx);
     });
+    if(key==='multiUserEnabled')invalidateMultiUserEnabledCache();
     res.json({ok:true,...(key==='multiUserEnabled'?{message:'Modo de acceso actualizado. Vuelve a iniciar sesion.'}:{})});
 });
 router.get('/overview', async (req, res) => {

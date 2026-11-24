@@ -1,6 +1,6 @@
-import { authenticate,errorHandler } from '../../shared/security';
+import { errorHandler } from '../../shared/security';
+import { corsOptions } from '../../shared/cors-options';
 import 'dotenv/config';
-import jwt, { JwtPayload } from 'jsonwebtoken';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -9,11 +9,15 @@ import axios from 'axios';
 import { createServer } from 'http';
 
 const app = express();
-app.use((req, res, next) => {
-  if (req.headers.origin === 'https://proyecto-neurorobi-l9b7ucvwf-melissa-chuquis-projects.vercel.app') { res.status(403).json({ error: 'Abre la version actual de NeuroRobi' }); return; }
+app.set('trust proxy', 1);
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
 });
-app.use(cors());
+app.use(cors(corsOptions));
 
 // Don't use express.json() here globally because it interferes with proxying POST requests.
 // We just forward raw requests.
@@ -71,13 +75,6 @@ const dynamicProxy = (serviceName: string): RequestHandler => {
     }
   });
 };
-
-// Device credentials are validated inside the telemetry service.
-app.use('/api', (req,res,next)=>{
- const route=req.path.replace(/\/+$/,'').toLowerCase();
- if(req.method==='POST'&&(route==='/auth/login'||route==='/telemetry'))return next();
- return authenticate(req,res,next);
-});
 
 // Proxy instances (created once)
 const authProxy = dynamicProxy('auth-service');

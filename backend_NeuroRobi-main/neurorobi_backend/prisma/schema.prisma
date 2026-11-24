@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 model Institution {
@@ -78,6 +78,8 @@ model ClinicalSession {
   sensorHistory       SensorReading[]
   spikesLog           SpikesLogItem[]
   @@index([patientId, date])
+  @@index([specialistId])
+  @@index([deviceId])
 }
 
 model SensorReading {
@@ -145,6 +147,7 @@ model PatientAssignment {
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
   specialist Specialist @relation(fields: [specialistId], references: [id], onDelete: Cascade)
   @@id([patientId, specialistId])
+  @@index([specialistId])
 }
 
 model NeuroDevice {
@@ -187,13 +190,21 @@ model PlatformSetting {
   value String
 }
 
+model LoginAttempt {
+  ipHash String @id
+  count Int @default(1)
+  windowStartedAt DateTime @default(now())
+  @@index([windowStartedAt])
+}
+
 model TelemetryPacket {
   id Int @id @default(autoincrement())
   receivedAt DateTime @default(now())
   deviceId String?
   device NeuroDevice? @relation(fields: [deviceId], references: [id])
   patientId String?
-  payload String
+  payload Json
   @@index([receivedAt])
   @@index([patientId])
+  @@index([deviceId])
 }

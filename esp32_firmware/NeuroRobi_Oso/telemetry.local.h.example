@@ -1,0 +1,6 @@
+#pragma once
+
+#define NEUROROBI_SERVER_IP "192.168.1.100"
+#define NEUROROBI_DEVICE_KEY "copia-TELEMETRY_API_KEY-del-backend"
+#define NEUROROBI_WIFI_SSID "nombre-de-la-red"
+#define NEUROROBI_WIFI_PASSWORD "clave-de-la-red"

@@ -57,8 +57,9 @@ export function AuthProvider({ children }: {
         setToken(data.token);
         return true;
     }
-    catch {
-        return false;
+    catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 401) return false;
+        throw error;
     } };
     return <AuthContext.Provider value={{ isAuthenticated: !!token && !!user, loading, user, token, userEmail: user?.email ?? null, userId: user?.id ?? null, userName: user?.name ?? null, userRole: user?.role ?? null, login, logout, refreshUser }}>{children}</AuthContext.Provider>;
 }

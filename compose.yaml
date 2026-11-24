@@ -1,13 +1,36 @@
 name: neurorobi
 services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: neurorobi
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d neurorobi"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
   migrate:
     image: neurorobi-backend:local
     build: ./backend_NeuroRobi-main/neurorobi_backend
-    command: ["node", "scripts/migrate.cjs"]
+    command: ["sh", "-c", "node scripts/migrate.cjs && node scripts/bootstrap-admin.cjs"]
     environment:
-      DATABASE_URL: file:/app/data/neurorobi.db
-    volumes:
-      - database:/app/data
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/neurorobi?schema=public
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      MULTI_USER_ENABLED: ${MULTI_USER_ENABLED:-true}
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-}
+      TELEMETRY_API_KEY: ${TELEMETRY_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: "no"
   backend:
     image: neurorobi-backend:local
@@ -17,17 +40,19 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      DATABASE_URL: file:/app/data/neurorobi.db
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/neurorobi?schema=public
       JWT_SECRET: ${JWT_SECRET:?Completa JWT_SECRET en .env}
       TELEMETRY_API_KEY: ${TELEMETRY_API_KEY:?Completa TELEMETRY_API_KEY en .env}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost,http://127.0.0.1}
       UPLOADS_DIR: /app/uploads
       SEED_DEMO_DATA: "false"
     volumes:
-      - database:/app/data
       - uploads:/app/uploads
     depends_on:
       migrate:
         condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 15s
@@ -49,7 +74,7 @@ services:
       backend:
         condition: service_healthy
 volumes:
-  database:
+  postgres:
   uploads:
   caddy_data:
   caddy_config:

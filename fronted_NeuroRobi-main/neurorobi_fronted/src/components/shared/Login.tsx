@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { Logo } from '../brand/Logo';
 import { User, Lock, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react';
@@ -32,9 +33,12 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
         setShouldShake(true);
         setTimeout(() => setShouldShake(false), 600);
       }
-    } catch {
+    } catch (error) {
       setIsLoading(false);
-      setError('Ocurrió un error de conexión con el servidor.');
+      const serverMessage = axios.isAxiosError(error) && typeof error.response?.data?.error === 'string'
+        ? error.response.data.error
+        : null;
+      setError(serverMessage || 'No se pudo conectar con el servidor. Revisa la conexión e inténtalo de nuevo.');
       setShouldShake(true);
       setTimeout(() => setShouldShake(false), 600);
     }
@@ -87,22 +91,22 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
 
               <form onSubmit={handleSubmit} className="space-y-4 mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
 
-                {/* Username input field */}
+                {/* Email input field */}
                 <div className="space-y-1.5">
-                  <label htmlFor="username" className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                    Usuario
+                  <label htmlFor="email" className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                    Correo electrónico
                   </label>
                   <div className="relative group">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500 group-focus-within:text-teal-400 transition-colors">
                       <User size={16} />
                     </div>
                     <input
-                      id="username"
-                      type="text"
+                      id="email"
+                      type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Tu usuario"
-                      autoComplete="username"
+                      placeholder="admin@neurorobi.local"
+                      autoComplete="email"
                       autoCapitalize="none"
                       spellCheck={false}
                       required

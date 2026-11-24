@@ -1,8 +1,9 @@
 require('dotenv').config();
 const bcrypt=require('bcryptjs'),{createHash}=require('crypto');
-const {PrismaClient}=require('@prisma/client'),{PrismaBetterSqlite3}=require('@prisma/adapter-better-sqlite3');
+const {PrismaClient}=require('@prisma/client'),{PrismaPg}=require('@prisma/adapter-pg');
 async function main(){
- const prisma=new PrismaClient({adapter:new PrismaBetterSqlite3({url:process.env.DATABASE_URL?.startsWith('file:')?process.env.DATABASE_URL:'file:./dev.db'})});
+ if(!/^postgres(ql)?:\/\//i.test(process.env.DATABASE_URL||''))throw new Error('Configura DATABASE_URL con una URL PostgreSQL valida');
+ const prisma=new PrismaClient({adapter:new PrismaPg({connectionString:process.env.DATABASE_URL})});
  const institutionId='neurorobi-default';
  const log=(action,resource)=>prisma.auditLog.create({data:{actorName:'Configuracion de arranque',institutionId,action,resource,result:'SUCCESS'}});
  try{

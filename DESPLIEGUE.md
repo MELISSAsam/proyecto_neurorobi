@@ -1,103 +1,56 @@
-# NeuroRobi: Vercel + Railway
+# NeuroRobi: Vercel + Railway PostgreSQL
 
-El frontend React se publica en Vercel. El backend mantiene sus seis procesos en un solo servicio Docker de Railway, con SQLite y fotos en un volumen persistente. No crees seis servicios ni una base PostgreSQL: el adaptador actual usa SQLite.
+El backend usa PostgreSQL mediante Prisma y `@prisma/adapter-pg`. SQLite queda solo como fuente de importación de datos antiguos. El frontend React se publica en Vercel.
 
-## 1. Backend en Railway
+## Railway: base y backend
 
-1. Sube estos cambios al repositorio y conecta el repositorio desde Railway, en un proyecto nuevo.
-2. En el servicio configura **Root Directory**: `backend_NeuroRobi-main/neurorobi_backend`.
-3. En Settings configura **Railway Config File**: `/backend_NeuroRobi-main/neurorobi_backend/railway.json` (ruta desde la raiz del repositorio). El archivo selecciona Dockerfile, arranque y health check.
-4. Agrega un **Volume** al mismo servicio, montado en `/app/data`. Configura una sola replica. Revisa el coste de servicio y almacenamiento en Railway antes de contratarlo.
-5. Agrega las variables de `.env.railway.example`, reemplazando todos los ejemplos:
+1. En el proyecto Railway crea un servicio **PostgreSQL**. La base debe permanecer privada dentro del proyecto.
+2. Conecta el repositorio y configura el servicio del backend:
+   - **Root Directory**: `backend_NeuroRobi-main/neurorobi_backend`
+   - **Railway Config File**: `/backend_NeuroRobi-main/neurorobi_backend/railway.json`
+   - `railway.json` configura `npm run db:migrate` como pre-deploy. Si Railway no aplica ese archivo a tu servicio, configura ese mismo comando en **Settings → Deploy → Pre-deploy Command**.
+3. En las variables del backend establece `DATABASE_URL` como referencia al servicio PostgreSQL. Si el servicio se llama `Postgres`, usa `${{Postgres.DATABASE_URL}}`; usa el nombre exacto que aparece en tu proyecto Railway.
+4. Configura las variables de `.env.railway.example`. Define `FRONTEND_URL` con el origen exacto de Vercel (sin ruta; puedes separar varios orígenes por coma), `INITIAL_ADMIN_EMAIL` y una contraseña nueva de al menos 12 caracteres para crear el primer acceso. Usa `MULTI_USER_ENABLED=true`. Genera `JWT_SECRET` y `TELEMETRY_API_KEY` por separado; no los pongas en Vercel ni en Git.
+   Antes de producción, rota la contraseña PostgreSQL compartida en la conversación y renueva también JWT, clave del dispositivo y credenciales Wi-Fi si estuvieron dentro del ZIP. Cambiar `JWT_SECRET` cierra las sesiones activas.
+5. Agrega un volumen al backend montado en `/app/data` para conservar las fotos de perfil (`UPLOADS_DIR=/app/data/uploads`). El volumen ya no guarda la base de datos.
+6. Despliega y revisa los logs. El pre-deploy de Railway aplica las migraciones PostgreSQL; `start:railway` prepara el administrador inicial y arranca los servicios. Railway asigna `PORT`; no lo fijes. La ruta `/health` debe responder 200 cuando todos los servicios internos están disponibles.
+7. En la pestaña **Backups** del servicio PostgreSQL activa copias programadas y Point-in-Time Recovery, y practica una restauración antes de guardar datos clínicos reales. Railway permite activar estas funciones desde el panel; revisa retención y costos para el proyecto. ([Backups de Railway](https://docs.railway.com/databases/postgresql), [PITR de Railway](https://docs.railway.com/volumes/point-in-time-recovery))
 
-| Variable | Valor |
-| --- | --- |
-| NODE_ENV | production |
-| DATABASE_URL | file:/app/data/neurorobi.db |
-| UPLOADS_DIR | /app/data/uploads |
-| RAILWAY_RUN_UID | 0 |
-| SEED_DEMO_DATA | false |
-| JWT_SECRET | Secreto aleatorio de al menos 32 caracteres |
-| TELEMETRY_API_KEY | Otro secreto aleatorio para los sensores |
-| INITIAL_ADMIN_EMAIL | Tu correo de administrador |
-| INITIAL_ADMIN_PASSWORD | Clave nueva de al menos 12 caracteres |
+La migración base crea el esquema en una base PostgreSQL vacía. Si PostgreSQL ya tiene tablas creadas, detén el despliegue y revisa su estado antes de aplicar migraciones.
 
-Genera cada secreto por separado con `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. Nunca lo subas al repositorio ni a las variables VITE.
+### Copiar los datos SQLite locales (opcional)
 
-Railway asigna `PORT`: no lo fijes ni configures URLs internas. `start:railway` aplica migraciones con el volumen montado, crea el administrador si no existe y arranca todos los procesos; si uno termina, se detienen los demas. No uses `npm start`, que solo inicia el gateway. No ejecutes migraciones durante build o pre-deploy, porque necesitan el volumen.
+El script `npm run db:import-sqlite` copia cuentas, instituciones, pacientes, sesiones, lecturas, dispositivos y configuración. Conserva los hashes de contraseña. Requiere `SQLITE_DATABASE_URL` para la base local, `DATABASE_URL` para PostgreSQL y que el esquema PostgreSQL ya esté migrado y vacío.
 
-6. Despliega y revisa los logs. En Networking genera el dominio publico del servicio, apuntando al puerto asignado por Railway. Guarda su URL HTTPS real.
-7. Comprueba `https://TU-BACKEND.up.railway.app/health`: debe responder 200 y `status: "ok"`. Devuelve 503 mientras falta algun servicio interno.
+El host `*.railway.internal` solo es accesible desde la red privada de Railway. Para importar desde Windows, hazlo **antes del primer despliegue del backend**: pausa su despliegue automático, habilita temporalmente el TCP Proxy público de PostgreSQL y, en PowerShell, ejecuta `$env:DATABASE_URL = Read-Host 'DATABASE_PUBLIC_URL temporal de Railway'`, luego `npm run db:migrate` y `npm run db:import-sqlite`; al terminar limpia la variable con `$env:DATABASE_URL = $null` y deshabilita el acceso público. Esto migra el esquema y los datos antes de que el arranque cree la cuenta inicial. No pegues la URL con contraseña en archivos, Git o Vercel. Si no necesitas conservar los datos locales, omite estos comandos y deja que el primer arranque cree la cuenta con `INITIAL_ADMIN_*`.
 
-El volumen conserva base y fotos entre despliegues. Sin volumen se perderian. No adjuntes una base antigua sin revisar esquema e historial de migraciones. Configura copias de seguridad del volumen antes de guardar datos reales.
+Tras confirmar el primer acceso, elimina `INITIAL_ADMIN_EMAIL` y `INITIAL_ADMIN_PASSWORD` de Railway; la cuenta queda guardada en PostgreSQL. Si importaste una cuenta existente, configura `SUPERADMIN_EMAIL` con su correo para asignarle permisos administrativos sin cambiar su contraseña.
 
-Referencias oficiales: [Dockerfiles](https://docs.railway.com/guides/dockerfiles), [volumenes](https://docs.railway.com/volumes), [variables](https://docs.railway.com/variables/reference), [configuracion en codigo](https://docs.railway.com/guides/config-as-code).
+## Vercel: frontend
 
-## 2. Frontend en Vercel
-
-Importa el mismo repositorio en Vercel y configura:
+Configura el proyecto con:
 
 | Ajuste | Valor |
 | --- | --- |
-| Root Directory | fronted_NeuroRobi-main/neurorobi_fronted |
+| Root Directory | `fronted_NeuroRobi-main/neurorobi_fronted` |
 | Framework | Vite |
 | Node | 22.x |
-| Install Command | npm ci |
-| Build Command | npm run build |
-| Output Directory | dist |
+| Install Command | `npm ci` |
+| Build Command | `npm run build` |
+| Output Directory | `dist` |
 
-Agrega en Production las variables de `.env.vercel.example`, con el dominio real de Railway:
+En Production agrega `VITE_API_URL` con el dominio HTTPS público del backend Railway, sin barra final ni `/api`. La API y Socket.IO usan el mismo host. Cada cambio requiere volver a desplegar el frontend.
 
-```dotenv
-VITE_API_URL=https://TU-BACKEND.up.railway.app
-VITE_WS_URL=https://TU-BACKEND.up.railway.app
-```
+## Desarrollo local
 
-Ambas usan HTTPS, sin barra final ni `/api`. Vercel compila estos valores dentro del frontend; cualquier cambio requiere un nuevo despliegue. El build en Vercel comprueba su formato. Usa un backend de pruebas separado para previews que modifiquen datos.
+El `compose.yaml` de la raíz inicia PostgreSQL local en `localhost:5432`. El `.env.example` del backend contiene una URL local de ejemplo. Para arrancar los servicios Node desde Windows, levanta primero la base local con Docker Compose y configura `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/neurorobi?schema=public` en el `.env` ignorado del backend. La base SQLite anterior se conserva como `SQLITE_DATABASE_URL` para importarla si hace falta.
 
-`vercel.json` configura la compilacion y las rutas de la aplicacion. Socket.IO se conecta directamente a Railway.
+## Sensores y login
 
-Referencia: [Vite en Vercel](https://vercel.com/docs/frameworks/frontend/vite).
+El firmware envía datos a `POST https://TU-BACKEND.up.railway.app/api/telemetry` por HTTPS, con la cabecera `x-device-key` igual a `TELEMETRY_API_KEY`. No publiques puertos internos.
 
-## 3. Acceso y sensores
+El formulario identifica al usuario por correo y contraseña. Un 401 en `/api/auth/login` significa que el backend rechazó esas credenciales o el acceso de la cuenta; los errores de red y del servidor ahora se muestran aparte. En Vercel, comprueba que `VITE_API_URL` apunte al backend correcto y vuelve a desplegar tras cambiarla.
 
-Inicia sesion con INITIAL_ADMIN_EMAIL e INITIAL_ADMIN_PASSWORD. Despues elimina ambas variables en Railway y redespliega: la cuenta permanece en SQLite. Si ya existe, el arranque conserva su clave. Las cuentas de demostracion no se crean en produccion.
+## Despliegue anterior en Render
 
-La API requiere `Authorization: Bearer TOKEN`, salvo login y recepcion de sensores. El frontend adjunta el token automaticamente; Socket.IO tambien lo valida. Solo ADMIN puede registrar especialistas y cada usuario solo puede editar su propio perfil.
-
-El ESP32 debe enviar sus lecturas a `POST https://TU-BACKEND.up.railway.app/api/telemetry`, usando HTTPS, JSON y la cabecera `x-device-key` con TELEMETRY_API_KEY. Actualiza el firmware con el dominio y la clave antes de probar sensores. Sin esa clave la API devuelve 401. No expongas los puertos internos como servicios publicos.
-
-## 4. Verificacion
-
-Antes de subir los cambios, desde cada directorio ejecuta `npm ci` y `npm run build`. En el backend ejecuta ademas `npm run test:deploy`: usa base, fotos y puertos de prueba separados, sin modificar la base de desarrollo.
-
-Despues de publicar, con datos ficticios comprueba:
-
-1. Health 200 e inicio de sesion desde Vercel.
-2. Registro de paciente con foto y edicion de perfil.
-3. Creacion y guardado de sesion e informe.
-4. Conexion Socket.IO y lecturas reales de oso con la clave del dispositivo.
-5. Persistencia de cuenta, pacientes, sesiones y fotos despues de redesplegar Railway.
-6. Acceso sin token rechazado en `/api/patients` y dispositivos sin clave rechazados en `/api/telemetry`.
-
-La compilacion local y las pruebas aisladas no sustituyen esta comprobacion en los dominios finales ni la prueba con hardware.
-
-## Alternativas existentes
-
-`render.yaml` conserva la alternativa anterior en Render y `compose.yaml` el despliegue Docker local. Para el flujo de esta guia utiliza Vercel y Railway.
-
-## Acceso unico de Melissa
-
-El login muestra un solo formulario de usuario y contrase?a, sin perfiles de demostracion.
-Para activar este modo en Railway agrega `SINGLE_USER_USERNAME=melissa` y configura
-`SINGLE_USER_PASSWORD` con la clave elegida. Estas variables tienen prioridad sobre
-INITIAL_ADMIN_EMAIL e INITIAL_ADMIN_PASSWORD; puedes retirar esas dos variables anteriores.
-Conserva SINGLE_USER_USERNAME y SINGLE_USER_PASSWORD en Railway: el arranque crea o actualiza
-la cuenta, almacenando la contrase?a con bcrypt. El identificador se guarda en el campo
-interno email por compatibilidad con el esquema; no necesita tener formato de correo.
-Solo esa cuenta puede iniciar sesion o usar API/Socket.IO y se bloquea el registro de
-otros especialistas. Las cuentas y sesiones antiguas se conservan en la base.
-Para cambiar la clave en este modo, cambia SINGLE_USER_PASSWORD y redespliega.
-Publica los cambios del backend en Railway y los del frontend en Vercel; luego cierra
-cualquier sesion anterior e ingresa con el usuario configurado. La contrase?a no se
-incluye en el codigo ni en las variables VITE del navegador.
+`render.yaml` corresponde al despliegue SQLite anterior. Para esta versión PostgreSQL usa Railway. No despliegues el backend con el blueprint antiguo de Render.
