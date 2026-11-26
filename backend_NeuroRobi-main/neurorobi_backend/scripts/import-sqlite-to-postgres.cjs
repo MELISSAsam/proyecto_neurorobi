@@ -44,10 +44,17 @@ async function main() {
       const columns = sqlite.prepare(`PRAGMA table_info(${quote(table)})`).all().map((column) => column.name).filter((column) => targetColumns.get(table).has(column));
       if (!columns.length) continue;
       const rows = sqlite.prepare(`SELECT * FROM ${quote(table)}`).all();
-      const sql = `INSERT INTO ${quote(table)} (${columns.map(quote).join(', ')}) VALUES (${columns.map((_, index) => `$${index + 1}`).join(', ')})`;
-      for (const row of rows) {
-        const values = columns.map((column) => booleanColumns.has(column) && row[column] !== null ? Boolean(row[column]) : row[column]);
-        await pg.query(sql, values);
+      // Multi-row inserts: one round-trip per chunk keeps remote imports fast.
+      const chunkSize = Math.max(1, Math.min(500, Math.floor(60000 / columns.length)));
+      for (let start = 0; start < rows.length; start += chunkSize) {
+        const chunk = rows.slice(start, start + chunkSize);
+        const values = [];
+        const tuples = chunk.map((row) => `(${columns.map((column) => {
+          values.push(booleanColumns.has(column) && row[column] !== null ? Boolean(row[column]) : row[column]);
+          return `$${values.length}`;
+        }).join(', ')})`);
+        await pg.query(`INSERT INTO ${quote(table)} (${columns.map(quote).join(', ')}) VALUES ${tuples.join(', ')}`, values);
+        if (rows.length > chunkSize) console.log(`  ${table}: ${Math.min(start + chunkSize, rows.length)}/${rows.length}`);
       }
       console.log(`${table}: ${rows.length} filas`);
     }
